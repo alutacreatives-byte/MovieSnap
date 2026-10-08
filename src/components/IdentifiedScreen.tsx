@@ -1,10 +1,11 @@
 import React from 'react';
-import { ChevronLeft, Share2, Sparkles, Film, ArrowRight, RotateCcw } from 'lucide-react';
+import { ChevronLeft, Share2, ArrowRight, RotateCcw, Home } from 'lucide-react';
 import { Movie } from '../types';
 import { TomatoIcon, PopcornIcon, ImdbBadge } from './RatingBadges';
 
 interface IdentifiedScreenProps {
   movie: Movie;
+  onBackToHome: () => void;
   onViewDetails: () => void;
   onViewRatings: () => void;
   onScanAnother: () => void;
@@ -12,6 +13,7 @@ interface IdentifiedScreenProps {
 
 export const IdentifiedScreen: React.FC<IdentifiedScreenProps> = ({
   movie,
+  onBackToHome,
   onViewDetails,
   onViewRatings,
   onScanAnother,
@@ -51,22 +53,29 @@ export const IdentifiedScreen: React.FC<IdentifiedScreenProps> = ({
 
       {/* Top Header Bar */}
       <header className="relative z-10 px-5 pt-6 pb-2 flex items-center justify-between">
+        {/* 2. Back arrow returns directly to homepage */}
         <button
-          onClick={onScanAnother}
-          className="glass-surface p-2.5 rounded-full text-neutral-300 hover:text-white transition-all active:scale-90"
-          aria-label="Scan again"
+          onClick={onBackToHome}
+          className="glass-surface p-2.5 rounded-full text-neutral-300 hover:text-white transition-all active:scale-90 cursor-pointer"
+          aria-label="Back to home"
+          title="Return to homepage"
         >
           <ChevronLeft className="w-5 h-5" />
         </button>
 
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-semibold shadow-lg">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span>MOVIE IDENTIFIED</span>
-        </div>
+        {/* 1. Clearly visible Home button */}
+        <button
+          onClick={onBackToHome}
+          className="glass-pill-badge flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-neutral-200 hover:text-white transition-all active:scale-95 cursor-pointer"
+          title="Return to MovieSnap homepage"
+        >
+          <Home className="w-3.5 h-3.5 text-rose-400" />
+          <span>Home</span>
+        </button>
 
         <button
           onClick={handleShare}
-          className="glass-surface p-2.5 rounded-full text-neutral-300 hover:text-white transition-all active:scale-90 relative"
+          className="glass-surface p-2.5 rounded-full text-neutral-300 hover:text-white transition-all active:scale-90 relative cursor-pointer"
           aria-label="Share movie"
         >
           <Share2 className="w-4 h-4" />
@@ -89,7 +98,6 @@ export const IdentifiedScreen: React.FC<IdentifiedScreenProps> = ({
               alt={movie.title}
               className="w-full h-full object-cover rounded-xl shadow-lg"
             />
-            {/* Specular glass reflection bar */}
             <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-white/10 via-transparent to-transparent pointer-events-none" />
           </div>
 
@@ -118,14 +126,13 @@ export const IdentifiedScreen: React.FC<IdentifiedScreenProps> = ({
           </div>
         </div>
 
-        {/* Hero Ratings Section: Rotten Tomatoes has STRONGEST visual hierarchy */}
+        {/* 5. Hero Ratings Section: Displays exact source for every rating */}
         <section className="space-y-3">
           {/* HERO: Rotten Tomatoes Score Card */}
           <div
             onClick={onViewRatings}
             className="cursor-pointer relative overflow-hidden rounded-3xl glass-surface p-5 border border-rose-500/30 shadow-[0_20px_50px_-10px_rgba(250,50,10,0.3)] group hover:border-rose-500/50 transition-all active:scale-[0.99]"
           >
-            {/* Ambient crimson glow */}
             <div className="absolute -right-10 -bottom-10 w-36 h-36 bg-rose-600/20 rounded-full blur-2xl pointer-events-none" />
 
             <div className="relative z-10 flex items-center justify-between">
@@ -146,6 +153,10 @@ export const IdentifiedScreen: React.FC<IdentifiedScreenProps> = ({
                     <span className="text-[10px] text-neutral-400 font-normal">
                       • {movie.rottenTomatoesStatus === 'certified-fresh' ? 'Certified Fresh' : 'Fresh'}
                     </span>
+                  </div>
+                  {/* Verified Rating Source Citation */}
+                  <div className="text-[10px] text-neutral-400 font-medium mt-0.5">
+                    Source: Rotten Tomatoes (Tomatometer)
                   </div>
                 </div>
               </div>
@@ -178,6 +189,9 @@ export const IdentifiedScreen: React.FC<IdentifiedScreenProps> = ({
                 <div className="text-[10px] font-extrabold uppercase tracking-wider text-amber-400">
                   AUDIENCE SCORE
                 </div>
+                <div className="text-[9px] text-neutral-400 mt-0.5">
+                  Source: Rotten Tomatoes
+                </div>
               </div>
             </div>
 
@@ -194,6 +208,9 @@ export const IdentifiedScreen: React.FC<IdentifiedScreenProps> = ({
                 </div>
                 <div className="text-[10px] font-extrabold uppercase tracking-wider text-neutral-300">
                   IMDb RATING
+                </div>
+                <div className="text-[9px] text-neutral-400 mt-0.5">
+                  Source: IMDb
                 </div>
               </div>
             </div>

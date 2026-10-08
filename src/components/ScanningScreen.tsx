@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { 
   ChevronLeft, Zap, ZapOff, Camera, RefreshCw, Radio, 
-  RotateCcw, EyeOff, Upload, Sparkles
+  RotateCcw, EyeOff, Upload, Sparkles, Home
 } from 'lucide-react';
 import { Movie } from '../types';
 import { sound } from '../utils/sound';
@@ -11,19 +11,23 @@ interface ScanningScreenProps {
   onIdentified: (movie: Movie) => void;
   onCancel: () => void;
   popularMovies: Movie[];
+  initialImage?: string | null;
+  initialMode?: 'live' | 'photo';
 }
 
 export const ScanningScreen: React.FC<ScanningScreenProps> = ({
   onIdentified,
   onCancel,
   popularMovies,
+  initialImage,
+  initialMode = 'live',
 }) => {
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const [torchOn, setTorchOn] = useState(false);
-  const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
+  const [capturedPhoto, setCapturedPhoto] = useState<string | null>(initialImage || null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isLiveAnalyzing, setIsLiveAnalyzing] = useState(false);
   const [identificationFailure, setIdentificationFailure] = useState<string | null>(null);
@@ -99,21 +103,26 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
       const isDenied = err instanceof DOMException && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError');
       setPermissionDenied(isDenied);
       const msg = isDenied 
-        ? 'Camera permission was not granted. Please allow camera access in your browser to scan movies.'
+        ? 'Camera permission was not granted. Please allow camera access in your browser settings to scan movies.'
         : err instanceof Error ? err.message : 'Could not start camera feed.';
       setCameraError(msg);
       setCameraActive(false);
     }
   }, [facingMode, stopCamera]);
 
-  // Mount effect
+  // Mount effect: handle initialImage or start camera
   useEffect(() => {
-    startCamera(facingMode);
+    if (initialImage) {
+      // If user uploaded an image from home screen, process it immediately
+      processImageDirectly(initialImage);
+    } else {
+      startCamera(facingMode);
+    }
 
     return () => {
       stopCamera();
     };
-  }, [facingMode, startCamera, stopCamera]);
+  }, [initialImage]);
 
   // Capture current frame from <video> onto canvas
   const captureFrame = (quality = 0.85): string | null => {
@@ -131,9 +140,40 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
     return canvas.toDataURL('image/jpeg', quality);
   };
 
+  // Process any image directly (from upload or capture)
+  const processImageDirectly = async (dataUrl: string) => {
+    sound.snap();
+    setCapturedPhoto(dataUrl);
+    setIsProcessing(true);
+    setIdentificationFailure(null);
+
+    if (videoRef.current) {
+      videoRef.current.pause();
+    }
+
+    try {
+      const result: IdentificationResult = await identifyMovieFromImage(dataUrl, popularMovies);
+      setIsProcessing(false);
+
+      if (result.identified && result.movie) {
+        sound.success();
+        stopCamera();
+        onIdentified(result.movie);
+      } else {
+        setIdentificationFailure(
+          result.reason || 'Movie not identified. Could not recognize any movie in this image.'
+        );
+      }
+    } catch (err) {
+      console.error('Image analysis error:', err);
+      setIsProcessing(false);
+      setIdentificationFailure('Movie not identified. Error analyzing image. Please try again.');
+    }
+  };
+
   // 1. Live Continuous Scanning: periodically sample live camera frames
   useEffect(() => {
-    if (!cameraActive || capturedPhoto || isProcessing || identificationFailure) {
+    if (!cameraActive || capturedPhoto || isProcessing || identificationFailure || initialMode === 'photo') {
       if (liveScanIntervalRef.current) {
         clearInterval(liveScanIntervalRef.current);
         liveScanIntervalRef.current = null;
@@ -152,7 +192,7 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
         isAnalyzingRef.current = true;
         setIsLiveAnalyzing(true);
 
-        const result: IdentificationResult = await identifyMovieFromImage(frameDataUrl, popularMovies);
+        const result: IdentificationResult = await identifyMovieFromImage(frameDataUrl, popularMovies, { isLiveScan: true });
 
         if (result.identified && result.movie) {
           // Movie identified live without taking photo!
@@ -174,47 +214,17 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
         liveScanIntervalRef.current = null;
       }
     };
-  }, [cameraActive, capturedPhoto, isProcessing, identificationFailure, popularMovies, onIdentified, stopCamera]);
+  }, [cameraActive, capturedPhoto, isProcessing, identificationFailure, initialMode, popularMovies, onIdentified, stopCamera]);
 
   // 2. Take a photo & analyze captured image
-  const handleCapturePhoto = async () => {
+  const handleCapturePhoto = () => {
     if (isProcessing) return;
-
     const photoDataUrl = captureFrame(0.9);
     if (!photoDataUrl) {
       setCameraError('Unable to capture frame. Please ensure camera is active.');
       return;
     }
-
-    sound.snap();
-    setCapturedPhoto(photoDataUrl);
-    setIsProcessing(true);
-    setIdentificationFailure(null);
-
-    if (videoRef.current) {
-      videoRef.current.pause();
-    }
-
-    try {
-      const result: IdentificationResult = await identifyMovieFromImage(photoDataUrl, popularMovies);
-
-      setIsProcessing(false);
-
-      if (result.identified && result.movie) {
-        sound.success();
-        stopCamera();
-        onIdentified(result.movie);
-      } else {
-        // Clear message if identification fails
-        setIdentificationFailure(
-          result.reason || 'Movie not identified. No matching movie scene or poster recognized in the captured photo.'
-        );
-      }
-    } catch (err) {
-      console.error('Photo analysis error:', err);
-      setIsProcessing(false);
-      setIdentificationFailure('Movie not identified. Error analyzing photo. Please retake the photo.');
-    }
+    processImageDirectly(photoDataUrl);
   };
 
   // 3. Upload an image from device & analyze
@@ -222,43 +232,17 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = async (event) => {
+      reader.onload = (event) => {
         const dataUrl = event.target?.result as string;
         if (dataUrl) {
-          sound.snap();
-          setCapturedPhoto(dataUrl);
-          setIsProcessing(true);
-          setIdentificationFailure(null);
-
-          if (videoRef.current) {
-            videoRef.current.pause();
-          }
-
-          try {
-            const result: IdentificationResult = await identifyMovieFromImage(dataUrl, popularMovies);
-            setIsProcessing(false);
-
-            if (result.identified && result.movie) {
-              sound.success();
-              stopCamera();
-              onIdentified(result.movie);
-            } else {
-              setIdentificationFailure(
-                result.reason || 'Movie not identified. Could not recognize any movie in the uploaded image.'
-              );
-            }
-          } catch (err) {
-            console.error('Uploaded image analysis error:', err);
-            setIsProcessing(false);
-            setIdentificationFailure('Movie not identified. Error analyzing uploaded image. Please try another image.');
-          }
+          processImageDirectly(dataUrl);
         }
       };
       reader.readAsDataURL(file);
     }
   };
 
-  // Back arrow returns to MovieSnap homepage
+  // 2. Back arrow returns to MovieSnap homepage
   const handleBackToHome = () => {
     stopCamera();
     onCancel();
@@ -271,6 +255,8 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
     setIsProcessing(false);
     if (videoRef.current) {
       videoRef.current.play().catch(() => {});
+    } else {
+      startCamera(facingMode);
     }
   };
 
@@ -370,15 +356,27 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
 
       {/* Top Floating Controls */}
       <header className="relative z-20 px-5 pt-6 pb-2 flex items-center justify-between">
-        {/* Back arrow returns to MovieSnap homepage */}
-        <button
-          onClick={handleBackToHome}
-          className="glass-surface p-2.5 rounded-full text-white/90 hover:text-white transition-all active:scale-90 cursor-pointer"
-          aria-label="Back to homepage"
-          title="Back to MovieSnap"
-        >
-          <ChevronLeft className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          {/* 2. Back arrow returns to MovieSnap homepage */}
+          <button
+            onClick={handleBackToHome}
+            className="glass-surface p-2.5 rounded-full text-white/90 hover:text-white transition-all active:scale-90 cursor-pointer"
+            aria-label="Back to homepage"
+            title="Back to MovieSnap"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+
+          {/* 1. Clearly visible Home button */}
+          <button
+            onClick={handleBackToHome}
+            className="glass-pill-badge flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-neutral-200 hover:text-white transition-all active:scale-95 cursor-pointer"
+            title="Return to MovieSnap homepage"
+          >
+            <Home className="w-3.5 h-3.5 text-rose-400" />
+            <span>Home</span>
+          </button>
+        </div>
 
         {/* Status Pill Badge */}
         <div className="glass-pill-badge px-4 py-1.5 rounded-full flex items-center gap-2 shadow-xl border border-rose-500/30">
@@ -388,14 +386,14 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
           </span>
           <span className="text-xs font-extrabold tracking-widest text-white uppercase font-sans flex items-center gap-1">
             {isProcessing
-              ? 'ANALYZING PHOTO...'
+              ? 'ANALYZING...'
               : capturedPhoto
               ? 'PHOTO CAPTURED'
               : isLiveAnalyzing
-              ? 'IDENTIFYING LIVE...'
+              ? 'AUTO-SCANNING...'
               : cameraActive
-              ? 'LIVE SCANNING TV'
-              : 'CAMERA STANDBY'}
+              ? 'LIVE SCANNING'
+              : 'STANDBY'}
           </span>
         </div>
 
@@ -414,7 +412,7 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
 
       {/* Center Reticle & Results Area */}
       <div className="relative z-10 flex-1 px-6 flex flex-col items-center justify-center">
-        {/* Clear "Movie Not Identified" result card if recognition fails */}
+        {/* 4. Clear "Movie Not Identified" result card (No Oppenheimer or default guessing) */}
         {identificationFailure ? (
           <div className="glass-surface w-full max-w-sm rounded-3xl p-6 border border-rose-500/30 shadow-2xl text-center space-y-4 animate-in fade-in zoom-in-95 duration-200">
             <div className="w-14 h-14 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center mx-auto shadow-md">
@@ -459,7 +457,6 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
         ) : (
           /* Live Holographic Glass Scanning Reticle */
           <div className="relative aspect-[16/10] w-full max-w-sm rounded-3xl glass-surface border border-white/30 shadow-[0_0_50px_rgba(250,50,10,0.25)] overflow-hidden flex flex-col justify-between p-4">
-            {/* Subtle inner grid lines */}
             <div className="absolute inset-0 bg-[radial-gradient(rgba(255,255,255,0.06)_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
 
             {/* Sweeping Laser Line (Active while camera is scanning) */}
@@ -495,7 +492,7 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
               </div>
               <p className="text-[11px] font-bold text-white mt-2 tracking-wide drop-shadow-md text-center">
                 {capturedPhoto
-                  ? 'Processing captured image...'
+                  ? 'Processing image...'
                   : 'Point at TV screen or movie poster'}
               </p>
             </div>
@@ -529,7 +526,7 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
               <div className="h-full bg-gradient-to-r from-amber-500 via-rose-500 to-red-600 animate-pulse shadow-[0_0_12px_#FA320A] w-full" />
             </div>
             <p className="text-xs text-rose-400 font-bold mt-2 animate-pulse tracking-wide">
-              Analyzing image for movie identification...
+              Analyzing movie visual features...
             </p>
           </div>
         )}
@@ -585,7 +582,7 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
         </div>
 
         <p className="text-[11px] text-neutral-400 font-medium text-center">
-          Auto-scans live TV feed, or tap shutter to take a photo, or tap Upload to pick an image
+          Auto-scans live TV feed, or tap shutter to take photo, or tap Upload to select an image
         </p>
       </footer>
     </div>

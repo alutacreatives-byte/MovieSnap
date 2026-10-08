@@ -1,19 +1,19 @@
 import React, { useState } from 'react';
-import { ChevronLeft, Play, RotateCcw, Clapperboard, Star, Share2, Tv } from 'lucide-react';
+import { ChevronLeft, Play, RotateCcw, Clapperboard, Star, Share2, Tv, Home } from 'lucide-react';
 import { Movie } from '../types';
 import { TomatoIcon, PopcornIcon, ImdbBadge } from './RatingBadges';
 import { TrailerModal } from './TrailerModal';
 
 interface MovieDetailsScreenProps {
   movie: Movie;
-  onBack: () => void;
+  onBackToHome: () => void;
   onViewRatings: () => void;
   onScanAnother: () => void;
 }
 
 export const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
   movie,
-  onBack,
+  onBackToHome,
   onViewRatings,
   onScanAnother,
 }) => {
@@ -34,10 +34,12 @@ export const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
 
         {/* Floating Top Navigation */}
         <header className="absolute top-0 inset-x-0 px-5 pt-6 flex items-center justify-between z-10">
+          {/* 2. Back arrow returns to homepage */}
           <button
-            onClick={onBack}
-            className="glass-surface p-2.5 rounded-full text-neutral-300 hover:text-white transition-all active:scale-90"
-            aria-label="Back"
+            onClick={onBackToHome}
+            className="glass-surface p-2.5 rounded-full text-neutral-300 hover:text-white transition-all active:scale-90 cursor-pointer"
+            aria-label="Back to home"
+            title="Return to homepage"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
@@ -46,12 +48,14 @@ export const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
             Movie Details
           </span>
 
+          {/* 1. Clearly visible Home button */}
           <button
-            onClick={onScanAnother}
-            className="glass-surface p-2.5 rounded-full text-neutral-300 hover:text-white transition-all active:scale-90"
-            aria-label="Scan another"
+            onClick={onBackToHome}
+            className="glass-pill-badge flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-neutral-200 hover:text-white transition-all active:scale-90 cursor-pointer"
+            title="Return to homepage"
           >
-            <RotateCcw className="w-4 h-4 text-rose-400" />
+            <Home className="w-3.5 h-3.5 text-rose-400" />
+            <span>Home</span>
           </button>
         </header>
 
@@ -59,198 +63,139 @@ export const MovieDetailsScreen: React.FC<MovieDetailsScreenProps> = ({
         <div className="absolute inset-0 flex items-center justify-center">
           <button
             onClick={() => setTrailerOpen(true)}
-            className="glass-pill-badge px-4 py-2 rounded-full flex items-center gap-2 group hover:bg-white/20 transition-all border border-white/30 shadow-2xl active:scale-95 cursor-pointer"
+            className="group flex items-center gap-2.5 px-5 py-3 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-md border border-white/25 text-white shadow-2xl transition-all active:scale-95 cursor-pointer"
           >
-            <div className="w-7 h-7 rounded-full bg-rose-600 flex items-center justify-center text-white shadow-md group-hover:scale-110 transition-transform">
-              <Play className="w-3.5 h-3.5 fill-white ml-0.5" />
+            <div className="w-7 h-7 rounded-full bg-rose-500 flex items-center justify-center group-hover:scale-110 transition-transform shadow-md">
+              <Play className="w-3.5 h-3.5 text-white fill-white ml-0.5" />
             </div>
-            <span className="text-xs font-extrabold text-white tracking-wider uppercase">
-              Watch Trailer
-            </span>
+            <span className="text-xs font-bold uppercase tracking-wider">Play Trailer</span>
           </button>
         </div>
       </div>
 
-      {/* Main Content Area */}
-      <main className="px-5 -mt-14 relative z-10 space-y-5">
-        {/* Poster & Header Info Card */}
-        <div className="glass-surface rounded-3xl p-5 border border-white/15 shadow-2xl">
-          <div className="flex gap-4">
-            {/* Poster Thumbnail */}
-            <div className="shrink-0 w-24 aspect-[2/3] rounded-xl overflow-hidden shadow-xl border border-white/20">
-              <img
-                src={movie.poster}
-                alt={movie.title}
-                className="w-full h-full object-cover"
-              />
-            </div>
-
-            {/* Title & Metadata */}
-            <div className="flex-1 min-w-0 flex flex-col justify-between">
-              <div>
-                <h1 className="text-xl font-black text-white tracking-tight leading-tight">
-                  {movie.title}
-                </h1>
-                <p className="text-xs text-rose-400 font-medium italic mt-0.5">
-                  "{movie.tagline}"
-                </p>
-
-                {/* Meta details */}
-                <div className="flex items-center gap-1.5 text-xs text-neutral-400 mt-2">
-                  <span>{movie.year}</span>
-                  <span>•</span>
-                  <span>{movie.runtime}</span>
-                  <span>•</span>
-                  <span className="px-1.5 py-0.5 rounded bg-white/10 text-[10px] text-neutral-300 font-semibold">
-                    {movie.mpaaRating}
-                  </span>
-                </div>
-              </div>
-
-              {/* Genre badges */}
-              <div className="flex flex-wrap gap-1 mt-2">
-                {movie.genre.map((g) => (
-                  <span
-                    key={g}
-                    className="text-[10px] font-semibold text-neutral-300 bg-white/5 border border-white/10 px-2 py-0.5 rounded-md"
-                  >
-                    {g}
-                  </span>
-                ))}
-              </div>
-            </div>
+      {/* Main Content */}
+      <main className="px-5 -mt-8 relative z-10 space-y-5">
+        {/* Title & Key Specs Header Card */}
+        <div className="glass-surface rounded-3xl p-5 border border-white/10 shadow-2xl space-y-3">
+          <div>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-rose-400">
+              {movie.tagline}
+            </span>
+            <h1 className="text-2xl font-black text-white tracking-tight mt-0.5">
+              {movie.title}
+            </h1>
           </div>
 
-          {/* Quick Rotten Tomatoes Score Bar */}
+          {/* Metadata badges row */}
+          <div className="flex items-center gap-2 flex-wrap text-xs text-neutral-300">
+            <span className="px-2 py-0.5 rounded-md bg-white/10 font-bold text-neutral-200">
+              {movie.mpaaRating}
+            </span>
+            <span>{movie.year}</span>
+            <span>•</span>
+            <span>{movie.runtime}</span>
+            <span>•</span>
+            <span className="text-neutral-400">Dir. {movie.director}</span>
+          </div>
+
+          {/* Quick Ratings Row */}
           <div 
             onClick={onViewRatings}
-            className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between cursor-pointer group"
+            className="pt-2 border-t border-white/10 flex items-center justify-between cursor-pointer group"
           >
             <div className="flex items-center gap-3">
-              <TomatoIcon status={movie.rottenTomatoesStatus} size="lg" />
-              <div>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-2xl font-black text-white font-sans">
-                    {movie.rottenTomatoesScore}%
-                  </span>
-                  <span className="text-[11px] font-extrabold uppercase text-rose-400">
-                    Tomatometer
-                  </span>
-                </div>
-                <span className="text-[10px] text-neutral-400">
-                  {movie.rottenTomatoesStatus === 'certified-fresh' ? 'Certified Fresh' : 'Fresh'} • {movie.reviewsCount} Reviews
-                </span>
+              <div className="flex items-center gap-1.5">
+                <TomatoIcon status={movie.rottenTomatoesStatus} size="sm" />
+                <span className="text-sm font-extrabold text-white">{movie.rottenTomatoesScore}%</span>
+                <span className="text-[10px] text-neutral-400 hidden sm:inline">(Rotten Tomatoes)</span>
+              </div>
+              <span className="text-neutral-600">|</span>
+              <div className="flex items-center gap-1.5">
+                <PopcornIcon status={movie.audienceStatus} size="sm" />
+                <span className="text-sm font-extrabold text-white">{movie.rottenTomatoesAudienceScore}%</span>
+              </div>
+              <span className="text-neutral-600">|</span>
+              <div className="flex items-center gap-1">
+                <ImdbBadge size="sm" />
+                <span className="text-xs font-bold text-white">{movie.imdbRating}</span>
               </div>
             </div>
-
-            <div className="flex items-center gap-3 pl-3 border-l border-white/10">
-              <PopcornIcon status={movie.audienceStatus} size="md" />
-              <div className="text-right">
-                <span className="text-lg font-black text-white">
-                  {movie.rottenTomatoesAudienceScore}%
-                </span>
-                <span className="block text-[9px] font-extrabold uppercase text-amber-400">
-                  Audience
-                </span>
-              </div>
-            </div>
+            <span className="text-xs text-rose-400 group-hover:text-rose-300 font-bold flex items-center gap-0.5">
+              Breakdown →
+            </span>
           </div>
         </div>
 
-        {/* Synopsis Section */}
-        <section className="glass-surface rounded-3xl p-5 border border-white/10">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-400 mb-2">
+        {/* Synopsis */}
+        <section className="space-y-2">
+          <h3 className="text-xs font-extrabold uppercase tracking-widest text-neutral-400">
             Synopsis
-          </h2>
-          <p className="text-xs text-neutral-200 leading-relaxed font-normal">
+          </h3>
+          <p className="text-xs text-neutral-200 leading-relaxed glass-surface p-4 rounded-2xl border border-white/5">
             {movie.synopsis}
           </p>
-          <div className="mt-3 pt-3 border-t border-white/10 flex items-center gap-2 text-xs text-neutral-400">
-            <span className="font-semibold text-neutral-300">Director:</span>
-            <span>{movie.director}</span>
-          </div>
         </section>
 
-        {/* Cast Section */}
-        <section className="space-y-2.5">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-400 px-1">
+        {/* Cast & Crew */}
+        <section className="space-y-2">
+          <h3 className="text-xs font-extrabold uppercase tracking-widest text-neutral-400">
             Top Cast
-          </h2>
-          <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2 -mx-5 px-5">
-            {movie.cast.map((actor) => (
-              <div
-                key={actor.name}
-                className="shrink-0 w-28 glass-surface rounded-2xl p-2.5 flex flex-col items-center text-center border border-white/10"
-              >
-                <div className="w-14 h-14 rounded-full overflow-hidden mb-2 border border-white/20 shadow-md">
-                  <img
-                    src={actor.image}
-                    alt={actor.name}
-                    className="w-full h-full object-cover"
-                  />
+          </h3>
+          <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1 -mx-5 px-5">
+            {movie.cast.map((c) => (
+              <div key={c.name} className="shrink-0 w-24 text-center">
+                <div className="w-16 h-16 rounded-full overflow-hidden mx-auto mb-1.5 border border-white/15 bg-neutral-900 shadow-md">
+                  <img src={c.image} alt={c.name} className="w-full h-full object-cover" />
                 </div>
-                <h4 className="text-xs font-bold text-white truncate w-full">
-                  {actor.name}
-                </h4>
-                <p className="text-[10px] text-neutral-400 truncate w-full mt-0.5">
-                  {actor.role}
-                </p>
+                <p className="text-xs font-bold text-white truncate">{c.name}</p>
+                <p className="text-[10px] text-neutral-400 truncate">{c.role}</p>
               </div>
             ))}
           </div>
         </section>
 
-        {/* Where to Watch / Streaming Section */}
-        <section className="glass-surface rounded-3xl p-5 border border-white/10">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
+        {/* Where to Watch / Streaming Platforms */}
+        <section className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-extrabold uppercase tracking-widest text-neutral-400 flex items-center gap-1.5">
               <Tv className="w-3.5 h-3.5 text-rose-400" />
               <span>Where to Watch</span>
-            </h2>
-            <span className="text-[10px] text-neutral-500 font-medium">US Streaming</span>
+            </h3>
+            <span className="text-[10px] text-neutral-500 font-medium">Updated today</span>
           </div>
 
           <div className="grid grid-cols-3 gap-2">
             {movie.streamingPlatforms.map((platform) => (
               <div
                 key={platform.name}
-                className="p-2.5 rounded-xl bg-white/[0.04] border border-white/10 text-center flex flex-col items-center justify-center hover:bg-white/[0.08] transition-colors"
+                className="glass-surface rounded-2xl p-3 text-center border border-white/5 space-y-1"
               >
-                <span className="text-lg mb-1">{platform.logo}</span>
-                <span className="text-xs font-bold text-white truncate max-w-full">
-                  {platform.name}
-                </span>
-                <span className="text-[9px] font-semibold text-rose-400 uppercase mt-0.5">
-                  {platform.type}
-                </span>
+                <div className="text-xl">{platform.logo}</div>
+                <div className="text-xs font-bold text-white truncate">{platform.name}</div>
+                <div className="text-[10px] text-neutral-400 font-medium">{platform.type}</div>
+                {platform.quality && (
+                  <span className="inline-block text-[9px] px-1.5 py-0.2 rounded bg-white/10 text-neutral-300 font-bold">
+                    {platform.quality}
+                  </span>
+                )}
               </div>
             ))}
           </div>
         </section>
-      </main>
 
-      {/* Floating Bottom Action Bar */}
-      <div className="fixed bottom-0 inset-x-0 p-4 bg-gradient-to-t from-black via-black/90 to-transparent z-30 flex justify-center">
-        <div className="w-full max-w-md flex gap-2.5">
-          <button
-            onClick={() => setTrailerOpen(true)}
-            className="flex-1 glass-button-secondary py-3 px-4 rounded-2xl flex items-center justify-center gap-2 text-white font-bold text-xs uppercase tracking-wider cursor-pointer"
-          >
-            <Play className="w-3.5 h-3.5 fill-white" />
-            <span>Watch Trailer</span>
-          </button>
-
+        {/* Scan Another Movie Action */}
+        <div className="pt-2">
           <button
             onClick={onScanAnother}
-            className="flex-1 glass-button-primary py-3 px-4 rounded-2xl flex items-center justify-center gap-2 text-white font-extrabold text-xs uppercase tracking-wider cursor-pointer"
+            className="w-full glass-button-secondary py-3 px-6 rounded-2xl flex items-center justify-center gap-2 text-neutral-300 hover:text-white font-bold text-xs tracking-wider uppercase cursor-pointer"
           >
-            <RotateCcw className="w-3.5 h-3.5 text-white" />
-            <span>Scan Another</span>
+            <RotateCcw className="w-3.5 h-3.5 text-rose-400" />
+            <span>SCAN ANOTHER MOVIE</span>
           </button>
         </div>
-      </div>
+      </main>
 
-      {/* Embedded Trailer Modal */}
+      {/* YouTube Trailer Modal */}
       <TrailerModal
         movie={movie}
         isOpen={trailerOpen}

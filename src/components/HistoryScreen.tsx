@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronLeft, Search, Camera, Clock, Trash2, ArrowRight } from 'lucide-react';
+import { ChevronLeft, Search, Camera, Home } from 'lucide-react';
 import { Movie } from '../types';
 import { TomatoIcon, ImdbBadge } from './RatingBadges';
 
@@ -7,7 +7,7 @@ interface HistoryScreenProps {
   movies: Movie[];
   onSelectMovie: (movie: Movie) => void;
   onScanAnother: () => void;
-  onBack: () => void;
+  onBackToHome: () => void;
   onClearHistory?: () => void;
 }
 
@@ -15,8 +15,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
   movies,
   onSelectMovie,
   onScanAnother,
-  onBack,
-  onClearHistory,
+  onBackToHome,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -30,10 +29,12 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
     <div className="relative flex flex-col min-h-full pb-24 overflow-y-auto no-scrollbar">
       {/* Top Header */}
       <header className="px-5 pt-6 pb-3 flex items-center justify-between sticky top-0 bg-neutral-950/80 backdrop-blur-xl z-20 border-b border-white/5">
+        {/* 2. Back arrow returns to homepage */}
         <button
-          onClick={onBack}
-          className="glass-surface p-2.5 rounded-full text-neutral-300 hover:text-white transition-all active:scale-90"
-          aria-label="Back"
+          onClick={onBackToHome}
+          className="glass-surface p-2.5 rounded-full text-neutral-300 hover:text-white transition-all active:scale-90 cursor-pointer"
+          aria-label="Back to home"
+          title="Return to homepage"
         >
           <ChevronLeft className="w-5 h-5" />
         </button>
@@ -47,7 +48,15 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
           </p>
         </div>
 
-        <div className="w-9" /> {/* Spacer */}
+        {/* 1. Clearly visible Home button */}
+        <button
+          onClick={onBackToHome}
+          className="glass-pill-badge flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-neutral-200 hover:text-white transition-all active:scale-95 cursor-pointer"
+          title="Return to homepage"
+        >
+          <Home className="w-3.5 h-3.5 text-rose-400" />
+          <span>Home</span>
+        </button>
       </header>
 
       {/* Main Content */}
@@ -74,7 +83,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
               </p>
               <p className="text-xs text-neutral-500 mt-1">
                 {movies.length === 0
-                  ? 'Tap Scan Movie to identify a film from your TV, screen or poster.'
+                  ? 'Tap Scan Movie on the homepage to identify a film from your TV, screen or poster.'
                   : 'Try searching with a different title or keyword.'}
               </p>
             </div>
@@ -94,63 +103,42 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
                   />
                 </div>
 
-                {/* Info & Scores */}
+                {/* Info */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-1">
-                    <h3 className="text-sm font-bold text-white truncate group-hover:text-rose-400 transition-colors">
-                      {movie.title}
-                    </h3>
-                  </div>
+                  <h4 className="text-sm font-bold text-white truncate group-hover:text-rose-400 transition-colors">
+                    {movie.title}
+                  </h4>
+                  <p className="text-xs text-neutral-400 mt-0.5">
+                    {movie.year} • {movie.runtime}
+                  </p>
 
-                  <div className="flex items-center gap-1.5 text-[11px] text-neutral-400 mt-0.5">
-                    <span>{movie.year}</span>
-                    <span>•</span>
-                    <span>{movie.runtime}</span>
-                  </div>
-
-                  {/* Rotten Tomatoes Score Hero Badge */}
-                  <div className="flex items-center gap-3 mt-2">
-                    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-black/60 border border-white/10">
+                  {/* Ratings Row */}
+                  <div className="flex items-center gap-2 mt-2">
+                    <div className="flex items-center gap-1">
                       <TomatoIcon status={movie.rottenTomatoesStatus} size="sm" />
-                      <span className="text-xs font-black text-white font-sans">
+                      <span className="text-xs font-extrabold text-white">
                         {movie.rottenTomatoesScore}%
                       </span>
                     </div>
-
-                    <div className="flex items-center gap-1 text-[11px] text-neutral-400">
+                    <span className="text-neutral-600">|</span>
+                    <div className="flex items-center gap-1">
                       <ImdbBadge size="sm" />
-                      <span className="font-bold text-neutral-300">{movie.imdbRating}</span>
-                    </div>
-
-                    <div className="ml-auto flex items-center gap-1 text-[10px] text-neutral-500">
-                      <Clock className="w-3 h-3" />
-                      <span>{movie.scannedAt}</span>
+                      <span className="text-[11px] font-bold text-white">
+                        {movie.imdbRating}
+                      </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Arrow */}
-                <div className="text-neutral-500 group-hover:text-white transition-colors pl-1">
-                  <ArrowRight className="w-4 h-4" />
+                {/* Scanned Time Tag */}
+                <div className="text-[10px] text-neutral-500 font-medium shrink-0 self-start">
+                  {movie.scannedAt}
                 </div>
               </div>
             ))
           )}
         </div>
       </main>
-
-      {/* Prominent Sticky CTA: SCAN ANOTHER MOVIE */}
-      <div className="fixed bottom-0 inset-x-0 p-4 bg-gradient-to-t from-black via-black/90 to-transparent z-30 flex justify-center">
-        <div className="w-full max-w-md">
-          <button
-            onClick={onScanAnother}
-            className="w-full glass-button-primary py-4 px-6 rounded-2xl flex items-center justify-center gap-3 text-white font-extrabold text-sm uppercase tracking-wider cursor-pointer shadow-2xl shadow-rose-950/50"
-          >
-            <Camera className="w-5 h-5 text-white" />
-            <span>SCAN ANOTHER MOVIE</span>
-          </button>
-        </div>
-      </div>
     </div>
   );
 };

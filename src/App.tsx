@@ -14,6 +14,8 @@ import { sound } from './utils/sound';
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<ScreenType>('home');
   const [currentMovie, setCurrentMovie] = useState<Movie>(SAMPLE_MOVIES[0]);
+  const [scanInitialImage, setScanInitialImage] = useState<string | null>(null);
+  const [scanInitialMode, setScanInitialMode] = useState<'live' | 'photo'>('live');
   const [historyMovies, setHistoryMovies] = useState<Movie[]>(() => {
     try {
       const saved = localStorage.getItem('moviesnap_history');
@@ -35,9 +37,24 @@ export default function App() {
     }
   }, [historyMovies]);
 
-  // Handlers
-  const handleStartScan = () => {
+  // Handlers for Home Screen Scanning options
+  const handleStartLiveScan = () => {
     if (audioEnabled) sound.tap();
+    setScanInitialImage(null);
+    setScanInitialMode('live');
+    setCurrentScreen('scanning');
+  };
+
+  const handleStartPhotoCapture = () => {
+    if (audioEnabled) sound.tap();
+    setScanInitialImage(null);
+    setScanInitialMode('photo');
+    setCurrentScreen('scanning');
+  };
+
+  const handleUploadImage = (dataUrl: string) => {
+    if (audioEnabled) sound.tap();
+    setScanInitialImage(dataUrl);
     setCurrentScreen('scanning');
   };
 
@@ -73,6 +90,8 @@ export default function App() {
 
   const handleScanAnother = () => {
     if (audioEnabled) sound.tap();
+    setScanInitialImage(null);
+    setScanInitialMode('live');
     setCurrentScreen('scanning');
   };
 
@@ -81,8 +100,10 @@ export default function App() {
     setCurrentScreen('history');
   };
 
+  // 1 & 2. Return directly to homepage from any screen
   const handleBackToHome = () => {
     if (audioEnabled) sound.tap();
+    setScanInitialImage(null);
     setCurrentScreen('home');
   };
 
@@ -92,7 +113,6 @@ export default function App() {
       <div className="fixed inset-0 pointer-events-none z-0">
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-rose-600/10 rounded-full blur-[140px]" />
         <div className="absolute bottom-1/4 left-1/3 w-[500px] h-[500px] bg-amber-500/5 rounded-full blur-[120px]" />
-        {/* Subtle grid pattern */}
         <div className="absolute inset-0 bg-[radial-gradient(rgba(255,255,255,0.03)_1px,transparent_1px)] [background-size:24px_24px]" />
       </div>
 
@@ -108,7 +128,7 @@ export default function App() {
           {/* Audio toggle */}
           <button
             onClick={() => setAudioEnabled(!audioEnabled)}
-            className="p-2 rounded-full glass-surface text-neutral-400 hover:text-white transition-colors"
+            className="p-2 rounded-full glass-surface text-neutral-400 hover:text-white transition-colors cursor-pointer"
             title={audioEnabled ? 'Mute sound effects' : 'Enable sound effects'}
           >
             {audioEnabled ? <Volume2 className="w-4 h-4 text-rose-400" /> : <VolumeX className="w-4 h-4" />}
@@ -117,40 +137,35 @@ export default function App() {
           {/* Viewport frame toggle */}
           <button
             onClick={() => setIsMobileFrameView(!isMobileFrameView)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full glass-surface text-xs font-medium text-neutral-300 hover:text-white transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full glass-surface text-xs font-medium text-neutral-300 hover:text-white transition-colors cursor-pointer"
           >
             {isMobileFrameView ? (
               <>
                 <Monitor className="w-3.5 h-3.5 text-rose-400" />
-                <span>Expand View</span>
+                <span>Full Width</span>
               </>
             ) : (
               <>
                 <Smartphone className="w-3.5 h-3.5 text-rose-400" />
-                <span>Mobile Device Frame</span>
+                <span>Mobile Frame</span>
               </>
             )}
           </button>
         </div>
       </header>
 
-      {/* App Container: Mobile Screen or Centered Device Frame */}
+      {/* App Shell Container */}
       <div
-        className={`w-full transition-all duration-300 relative z-10 ${
+        className={`w-full transition-all duration-300 relative z-10 flex flex-col ${
           isMobileFrameView
-            ? 'max-w-[420px] my-0 md:my-8 rounded-none md:rounded-[44px] shadow-2xl md:border md:border-white/15 bg-neutral-950 overflow-hidden ring-1 ring-white/5'
-            : 'max-w-2xl min-h-screen md:min-h-0 md:my-10 rounded-none md:rounded-3xl glass-surface overflow-hidden'
+            ? 'max-w-[430px] min-h-screen md:min-h-[880px] md:max-h-[920px] md:my-8 md:rounded-[44px] md:shadow-[0_25px_80px_rgba(0,0,0,0.9),0_0_0_12px_#18181b,0_0_0_14px_rgba(255,255,255,0.08)] bg-neutral-950 overflow-hidden'
+            : 'max-w-2xl min-h-screen bg-neutral-950'
         }`}
-        style={{
-          minHeight: isMobileFrameView ? '844px' : 'auto',
-          height: isMobileFrameView ? 'min(880px, 100vh)' : 'auto',
-        }}
       >
         {/* Mobile Device Status Bar simulation (shown in frame mode) */}
         {isMobileFrameView && (
           <div className="hidden md:flex items-center justify-between px-7 pt-3 pb-1 text-[11px] font-semibold text-neutral-400 select-none bg-neutral-950/60 backdrop-blur-md relative z-30">
             <span>9:41</span>
-            {/* Dynamic Island pill */}
             <div className="w-24 h-5 rounded-full bg-black border border-white/10 flex items-center justify-center gap-2">
               <span className="w-2 h-2 rounded-full bg-neutral-900 border border-neutral-700" />
               <span className="w-2 h-2 rounded-full bg-neutral-900 border border-neutral-700" />
@@ -177,7 +192,9 @@ export default function App() {
                 className="flex-1"
               >
                 <HomeScreen
-                  onStartScan={handleStartScan}
+                  onStartLiveScan={handleStartLiveScan}
+                  onStartPhotoCapture={handleStartPhotoCapture}
+                  onUploadImage={handleUploadImage}
                   onOpenHistory={handleOpenHistory}
                   onSelectMovie={handleSelectMovie}
                   popularMovies={SAMPLE_MOVIES}
@@ -199,6 +216,8 @@ export default function App() {
                   onIdentified={handleIdentified}
                   onCancel={handleBackToHome}
                   popularMovies={SAMPLE_MOVIES}
+                  initialImage={scanInitialImage}
+                  initialMode={scanInitialMode}
                 />
               </motion.div>
             )}
@@ -214,6 +233,7 @@ export default function App() {
               >
                 <IdentifiedScreen
                   movie={currentMovie}
+                  onBackToHome={handleBackToHome}
                   onViewDetails={handleViewDetails}
                   onViewRatings={handleViewRatings}
                   onScanAnother={handleScanAnother}
@@ -232,7 +252,7 @@ export default function App() {
               >
                 <RatingsScreen
                   movie={currentMovie}
-                  onBack={() => setCurrentScreen('identified')}
+                  onBackToHome={handleBackToHome}
                   onViewDetails={handleViewDetails}
                   onScanAnother={handleScanAnother}
                 />
@@ -250,7 +270,7 @@ export default function App() {
               >
                 <MovieDetailsScreen
                   movie={currentMovie}
-                  onBack={() => setCurrentScreen('identified')}
+                  onBackToHome={handleBackToHome}
                   onViewRatings={handleViewRatings}
                   onScanAnother={handleScanAnother}
                 />
@@ -270,7 +290,7 @@ export default function App() {
                   movies={historyMovies}
                   onSelectMovie={handleSelectMovie}
                   onScanAnother={handleScanAnother}
-                  onBack={handleBackToHome}
+                  onBackToHome={handleBackToHome}
                 />
               </motion.div>
             )}

@@ -1,10 +1,12 @@
-import React from 'react';
-import { Camera, History, Tv, Sparkles, ChevronRight, TrendingUp } from 'lucide-react';
+import React, { useRef } from 'react';
+import { Camera, History, Tv, TrendingUp, ChevronRight, Upload, Sparkles, Image as ImageIcon } from 'lucide-react';
 import { Movie } from '../types';
 import { TomatoIcon } from './RatingBadges';
 
 interface HomeScreenProps {
-  onStartScan: () => void;
+  onStartLiveScan: () => void;
+  onStartPhotoCapture: () => void;
+  onUploadImage: (dataUrl: string) => void;
   onOpenHistory: () => void;
   onSelectMovie: (movie: Movie) => void;
   popularMovies: Movie[];
@@ -12,12 +14,30 @@ interface HomeScreenProps {
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
-  onStartScan,
+  onStartLiveScan,
+  onStartPhotoCapture,
+  onUploadImage,
   onOpenHistory,
   onSelectMovie,
   popularMovies,
   historyCount,
 }) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const dataUrl = event.target?.result as string;
+        if (dataUrl) {
+          onUploadImage(dataUrl);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-full pb-8">
       {/* Top Navigation Bar */}
@@ -41,7 +61,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         {/* History button */}
         <button
           onClick={onOpenHistory}
-          className="glass-pill-badge flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-neutral-300 hover:text-white transition-all active:scale-95"
+          className="glass-pill-badge flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-neutral-300 hover:text-white transition-all active:scale-95 cursor-pointer"
           aria-label="View scan history"
         >
           <History className="w-3.5 h-3.5 text-rose-400" />
@@ -54,7 +74,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </button>
       </header>
 
-      {/* Main Focus: Camera Scanning Experience */}
+      {/* Main Focus: Live TV Viewport & Scanning Actions */}
       <main className="flex-1 px-5 flex flex-col justify-between space-y-6">
         {/* TV Viewfinder & Instruction Glass Card */}
         <div className="relative rounded-3xl glass-surface p-4 overflow-hidden group">
@@ -62,10 +82,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <div className="absolute -top-16 -right-16 w-48 h-48 bg-rose-600/15 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute -bottom-16 -left-16 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
 
-          {/* Living Room TV Scene Viewport */}
+          {/* Living Room TV Scene Viewport - Tapping starts Live Scan */}
           <div 
-            onClick={onStartScan}
+            onClick={onStartLiveScan}
             className="relative aspect-[4/3] w-full rounded-2xl overflow-hidden cursor-pointer border border-white/10 shadow-2xl bg-neutral-950 flex flex-col items-center justify-center group-hover:border-white/25 transition-all"
+            title="Tap to start live continuous scan"
           >
             {/* Living Room Television Scene */}
             <img
@@ -79,13 +100,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
             {/* Corner Alignment Reticle */}
             <div className="absolute inset-6 pointer-events-none">
-              {/* Top-Left */}
               <div className="absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 border-white/70 rounded-tl-lg" />
-              {/* Top-Right */}
               <div className="absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 border-white/70 rounded-tr-lg" />
-              {/* Bottom-Left */}
               <div className="absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 border-white/70 rounded-bl-lg" />
-              {/* Bottom-Right */}
               <div className="absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 border-white/70 rounded-br-lg" />
 
               {/* Center Crosshair / Scanning Hint */}
@@ -100,13 +117,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <div className="relative z-10 text-center px-4">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/15 text-xs font-semibold text-white mb-2 shadow-lg">
                 <Tv className="w-3.5 h-3.5 text-rose-400" />
-                <span>Instant Movie Recognition</span>
+                <span>Live Continuous Scanner</span>
               </div>
               <h2 className="text-xl font-extrabold text-white tracking-tight drop-shadow-md">
-                Point your phone at your TV.
+                Point phone at TV screen
               </h2>
               <p className="text-xs text-neutral-300 font-medium mt-1 drop-shadow">
-                Instant Rotten Tomatoes score & movie details
+                Auto-detects movies & retrieves Rotten Tomatoes scores
               </p>
             </div>
 
@@ -114,30 +131,62 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <div className="absolute bottom-3 inset-x-3 flex items-center justify-between px-3.5 py-1.5 rounded-xl bg-black/70 backdrop-blur-md border border-white/10 text-[11px] text-neutral-300">
               <span className="flex items-center gap-1.5 text-neutral-300 font-medium">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                Camera Ready
+                Auto-Scan Ready
               </span>
               <span className="font-semibold text-rose-400 flex items-center gap-1">
-                Tap to Scan TV <ChevronRight className="w-3 h-3" />
+                Tap to Scan <ChevronRight className="w-3 h-3" />
               </span>
             </div>
           </div>
         </div>
 
-        {/* The One Obvious Primary Action: SCAN MOVIE */}
-        <div>
+        {/* 3. Three Working Scanning Options: Live Scan, Take Photo, Upload Image */}
+        <div className="space-y-2.5">
+          {/* Option A: Primary Big Button: LIVE SCAN MOVIE */}
           <button
-            onClick={onStartScan}
+            onClick={onStartLiveScan}
             className="w-full glass-button-primary py-4 px-6 rounded-2xl flex items-center justify-center gap-3 group text-white font-bold text-base tracking-wide cursor-pointer shadow-xl shadow-rose-950/40"
           >
             <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform">
               <Camera className="w-5 h-5 text-white" />
             </div>
-            <span className="text-lg uppercase tracking-wider font-extrabold">SCAN MOVIE</span>
+            <span className="text-lg uppercase tracking-wider font-extrabold">LIVE SCAN MOVIE</span>
           </button>
-          <p className="text-center text-[11px] text-neutral-500 mt-2 font-medium">
-            Opens camera to scan movies playing on your TV or screen
+
+          {/* Options B & C: Quick Action Buttons: Take Photo & Upload Image */}
+          <div className="grid grid-cols-2 gap-2.5">
+            <button
+              onClick={onStartPhotoCapture}
+              className="glass-surface-interactive py-3 px-3.5 rounded-2xl flex items-center justify-center gap-2 text-xs font-bold text-neutral-200 hover:text-white border border-white/10"
+              title="Open camera and take a still photo"
+            >
+              <Camera className="w-4 h-4 text-rose-400 shrink-0" />
+              <span>Take Photo</span>
+            </button>
+
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="glass-surface-interactive py-3 px-3.5 rounded-2xl flex items-center justify-center gap-2 text-xs font-bold text-neutral-200 hover:text-white border border-white/10"
+              title="Select a movie poster or screenshot from device"
+            >
+              <Upload className="w-4 h-4 text-rose-400 shrink-0" />
+              <span>Upload Image</span>
+            </button>
+          </div>
+
+          <p className="text-center text-[11px] text-neutral-500 font-medium">
+            Live scanning auto-detects from video. Take photo or upload to scan any scene.
           </p>
         </div>
+
+        {/* Hidden File Picker Input for Home Upload */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleFileChange}
+          className="hidden"
+        />
 
         {/* Popular Movies Section */}
         <section className="space-y-3">
@@ -149,7 +198,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               </h3>
             </div>
             <span className="text-[11px] text-neutral-500 font-medium">
-              Top Rated Scores
+              Verified Rotten Tomatoes Scores
             </span>
           </div>
 
@@ -183,6 +232,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   <div className="flex items-center justify-between text-[10px] text-neutral-400 mt-0.5">
                     <span>{movie.year}</span>
                     <span>{movie.runtime}</span>
+                  </div>
+                  <div className="mt-1 flex items-center gap-1 text-[9px] text-neutral-400 truncate">
+                    <span>Source: Rotten Tomatoes</span>
                   </div>
                 </div>
               </div>

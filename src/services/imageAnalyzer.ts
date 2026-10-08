@@ -9,9 +9,8 @@ export interface AnalysisResult {
 }
 
 /**
- * Analyzes the captured photo frame from the device camera.
- * Does NOT return a hardcoded movie. If the image lacks sufficient features
- * or does not match a known movie scene/poster, it returns identified: false.
+ * Analyzes the captured frame without guessing.
+ * NEVER returns Oppenheimer, Batman, or any default movie when identification fails.
  */
 export function analyzeCapturedFrame(
   imageDataUrl: string,
@@ -21,7 +20,7 @@ export function analyzeCapturedFrame(
     if (!imageDataUrl || !imageDataUrl.startsWith('data:image/')) {
       resolve({
         identified: false,
-        reason: 'Invalid or missing image data from camera.',
+        reason: 'Invalid or missing image data from camera feed.',
       });
       return;
     }
@@ -32,7 +31,7 @@ export function analyzeCapturedFrame(
     img.onload = () => {
       try {
         const canvas = document.createElement('canvas');
-        const size = 120; // Sample grid size
+        const size = 120;
         canvas.width = size;
         canvas.height = size;
         const ctx = canvas.getContext('2d');
@@ -46,26 +45,16 @@ export function analyzeCapturedFrame(
         const imgData = ctx.getImageData(0, 0, size, size);
         const data = imgData.data;
 
-        let totalR = 0;
-        let totalG = 0;
-        let totalB = 0;
         let totalBrightness = 0;
         const pixelCount = size * size;
 
-        // Calculate average RGB and brightness
         for (let i = 0; i < data.length; i += 4) {
           const r = data[i];
           const g = data[i + 1];
           const b = data[i + 2];
-          totalR += r;
-          totalG += g;
-          totalB += b;
           totalBrightness += (r * 299 + g * 587 + b * 114) / 1000;
         }
 
-        const avgR = totalR / pixelCount;
-        const avgG = totalG / pixelCount;
-        const avgB = totalB / pixelCount;
         const avgBrightness = totalBrightness / pixelCount;
 
         // Calculate variance (contrast)
@@ -76,99 +65,30 @@ export function analyzeCapturedFrame(
         }
         const stdDev = Math.sqrt(varianceSum / pixelCount);
 
-        // Check 1: Image is too dark or practically black (e.g. covered lens)
-        if (avgBrightness < 15) {
+        // Check 1: Image is too dark (e.g. lens covered)
+        if (avgBrightness < 16) {
           resolve({
             identified: false,
-            reason: 'Image is too dark. Point your camera at a lit TV screen or poster.',
+            reason: 'Image is too dark. Please aim at an active TV screen, monitor, or movie poster.',
           });
           return;
         }
 
-        // Check 2: Image is completely uniform with almost no contrast (e.g. blank wall, ceiling)
-        if (stdDev < 14) {
+        // Check 2: Image lacks visual contrast (e.g. blank wall or ceiling)
+        if (stdDev < 12) {
           resolve({
             identified: false,
-            reason: 'No movie features detected. Frame appears blank or lacks contrast.',
+            reason: 'Frame lacks distinct movie visual features. Point directly at your TV or poster.',
           });
           return;
         }
 
-        // Check 3: Check color profile against catalog movie visual palettes
-        // Batman: Dark noir, high shadow depth, red/crimson accents
-        // Dune: Warm desert ochre, strong red+green over blue
-        // Oppenheimer: High contrast sepia/gold with bright highlight explosions
-        // Spider-Man: High saturation, magenta/cyan comic balance
-        // Blade Runner: Neon amber/cyan futuristic atmosphere
-        // Interstellar: Deep space black with cosmic white/blue starfield
-
-        const redRatio = avgR / (avgG + avgB + 1);
-        const desertRatio = (avgR + avgG) / (avgB * 2 + 1);
-        const blueRatio = avgB / (avgR + avgG + 1);
-
-        // Match against catalog with strict threshold
-        let bestMatch: Movie | null = null;
-        let highestConfidence = 0;
-
-        // Dune match: desert warm palette with high contrast
-        if (desertRatio > 1.35 && avgR > 110 && stdDev > 25) {
-          const dune = catalog.find((m) => m.id === 'dune-part-two-2024');
-          if (dune) {
-            bestMatch = dune;
-            highestConfidence = 0.88;
-          }
-        }
-
-        // Batman match: dark noir atmosphere (avg brightness < 80) with deep red accent (redRatio > 0.65)
-        if (!bestMatch && avgBrightness < 85 && redRatio > 0.55 && stdDev > 20) {
-          const batman = catalog.find((m) => m.id === 'the-batman-2022');
-          if (batman) {
-            bestMatch = batman;
-            highestConfidence = 0.85;
-          }
-        }
-
-        // Spider-Man match: high vibrant colorful saturation
-        if (!bestMatch && Math.abs(avgR - avgB) > 30 && stdDev > 35 && avgBrightness > 70) {
-          const spiderman = catalog.find((m) => m.id === 'spider-man-across-spider-verse-2023');
-          if (spiderman) {
-            bestMatch = spiderman;
-            highestConfidence = 0.82;
-          }
-        }
-
-        // Oppenheimer match: high contrast golden/sepia glow
-        if (!bestMatch && avgBrightness > 90 && avgR > avgG && avgG > avgB && stdDev > 40) {
-          const oppenheimer = catalog.find((m) => m.id === 'oppenheimer-2023');
-          if (oppenheimer) {
-            bestMatch = oppenheimer;
-            highestConfidence = 0.80;
-          }
-        }
-
-        // Interstellar match: deep space dark with cold cyan/blue highlights
-        if (!bestMatch && avgBrightness < 95 && blueRatio > 0.55 && stdDev > 22) {
-          const interstellar = catalog.find((m) => m.id === 'interstellar-2014');
-          if (interstellar) {
-            bestMatch = interstellar;
-            highestConfidence = 0.78;
-          }
-        }
-
-        // If confidence threshold met:
-        if (bestMatch && highestConfidence >= 0.75) {
-          resolve({
-            identified: true,
-            movie: bestMatch,
-            confidence: highestConfidence,
-          });
-        } else {
-          // DO NOT GUESS OR RETURN HARDCODED BATMAN!
-          resolve({
-            identified: false,
-            reason: 'Movie not identified. Could not recognize a known movie scene or poster in the frame.',
-          });
-        }
+        // NO HARDCODED OPPENHEIMER, BATMAN OR HEURISTIC GUESSING.
+        // Unless verified visual matching or AI vision identifies a movie, do NOT invent a match.
+        resolve({
+          identified: false,
+          reason: 'Movie not identified. Could not recognize a known movie scene or poster in this frame.',
+        });
       } catch (err) {
         console.error('Frame analysis error:', err);
         resolve({

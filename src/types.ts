@@ -13,6 +13,15 @@ export interface StreamingPlatform {
   quality?: string;
 }
 
+export interface RatingSource {
+  name: string;
+  score: string;
+  type: 'critic' | 'audience' | 'user';
+  available: boolean;
+  verified: boolean;
+  url?: string;
+}
+
 export interface Movie {
   id: string;
   title: string;
@@ -41,4 +50,6 @@ export interface Movie {
   trailerTitle: string;
   streamingPlatforms: StreamingPlatform[];
   scannedAt: string;
+  ratingSources?: RatingSource[];
+  primaryRatingSource?: string;
 }
