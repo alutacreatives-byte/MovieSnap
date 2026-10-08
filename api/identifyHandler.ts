@@ -80,7 +80,7 @@ Respond in STRICT JSON format with this exact structure:
 }`;
 
   // Try candidate models in order of speed and capability
-  const models = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'];
+  const models = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'];
 
   for (const model of models) {
     try {
