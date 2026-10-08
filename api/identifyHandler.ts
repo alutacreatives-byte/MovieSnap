@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { GoogleGenAI } from '@google/genai';
 
 export interface SceneIdentificationResponse {
@@ -24,15 +25,15 @@ export interface SceneIdentificationResponse {
  * Real visual scene identification handler.
  * Analyzes actors, characters, locations, costumes, cinematography and visual context.
  * Identifies both Movies and TV Series from actual scenes.
- * Never defaults to Oppenheimer or fabricated titles.
  */
 export async function identifySceneFromImage(base64Image: string): Promise<SceneIdentificationResponse> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
 
   if (!apiKey) {
+    console.error('MovieSnap Error: GEMINI_API_KEY or API_KEY is not defined in environment variables.');
     return {
       identified: false,
-      reason: 'MovieSnap Vision API key (GEMINI_API_KEY) is not configured in the environment.',
+      reason: 'MovieSnap API key (GEMINI_API_KEY) is not configured in the environment.',
     };
   }
 
@@ -45,13 +46,13 @@ export async function identifySceneFromImage(base64Image: string): Promise<Scene
     apiKey,
     httpOptions: {
       headers: {
-        'User-Agent': 'aistudio-build',
+        'User-Agent': 'MovieSnap-Vision-Engine',
       },
     },
   });
 
   const prompt = `You are a film and television scene recognition engine.
-Inspect this captured scene image and use Google Search to verify and identify if this image shows a recognizable scene from an existing Movie or TV Series.
+Inspect this captured scene image and use Google Search grounding to verify and identify if this image shows a recognizable scene from an existing Movie or TV Series.
 Crucial rules:
 1. The image does NOT need to contain the title, poster, text, or subtitles. Use visual information such as recognizable actors, characters, setting, locations, costumes, lighting, cinematography, and production style.
 2. Distinguish clearly whether it is a "Movie" or a "TV Series".
@@ -79,7 +80,6 @@ Respond in STRICT JSON format with this exact structure:
   "confidence": 0.95
 }`;
 
-  // Try candidate models in order of speed and capability
   const models = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'];
 
   for (const model of models) {
@@ -109,7 +109,13 @@ Respond in STRICT JSON format with this exact structure:
 
       const text = response.text?.trim();
       if (text) {
-        const parsed = JSON.parse(text);
+        // Clean potential markdown code blocks
+        const cleanText = text
+          .replace(/^```json\s*/i, '')
+          .replace(/^```\s*/i, '')
+          .replace(/\s*```$/, '');
+        
+        const parsed = JSON.parse(cleanText);
         if (parsed.identified && parsed.title) {
           const sources: Array<{ name: string; score: string; type: string }> = [];
           if (parsed.rottenTomatoesScore) {

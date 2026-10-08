@@ -40,6 +40,9 @@ export async function identifyMovieFromImage(
 
     if (response.ok) {
       serverData = await response.json();
+    } else {
+      const errBody = await response.text();
+      console.warn('Server identification API error response:', response.status, errBody);
     }
   } catch (err) {
     console.warn('Server API identification error, attempting client-side fallback:', err);
@@ -47,16 +50,17 @@ export async function identifyMovieFromImage(
 
   let data = serverData;
 
-  if ((!data || !data.identified) && (import.meta.env.VITE_GEMINI_API_KEY || (window as any).__GEMINI_API_KEY)) {
+  // If server didn't identify or failed, try client-side Gemini SDK fallback
+  const clientApiKey = import.meta.env.VITE_GEMINI_API_KEY || (window as any).__GEMINI_API_KEY;
+  if ((!data || !data.identified) && clientApiKey) {
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (window as any).__GEMINI_API_KEY;
-      const ai = new GoogleGenAI({ apiKey });
+      const ai = new GoogleGenAI({ apiKey: clientApiKey });
       const base64Data = imageDataUrl.replace(/^data:image\/[a-z]+;base64,/, '');
       const mimeMatch = imageDataUrl.match(/^data:(image\/[a-z]+);base64,/);
       const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
 
       const prompt = `You are a film and television scene recognition engine.
-Inspect this captured scene image and use Google Search to verify and identify if this image shows a recognizable scene from an existing Movie or TV Series.
+Inspect this captured scene image and use Google Search grounding to verify and identify if this image shows a recognizable scene from an existing Movie or TV Series.
 Crucial rules:
 1. The image does NOT need to contain the title, poster, text, or subtitles. Use visual information such as recognizable actors, characters, setting, locations, costumes, lighting, cinematography, and production style.
 2. Distinguish clearly whether it is a "Movie" or a "TV Series".
@@ -109,7 +113,11 @@ Respond in STRICT JSON format with this exact structure:
 
       const text = clientResponse.text?.trim();
       if (text) {
-        data = JSON.parse(text);
+        const cleanText = text
+          .replace(/^```json\s*/i, '')
+          .replace(/^```\s*/i, '')
+          .replace(/\s*```$/, '');
+        data = JSON.parse(cleanText);
       }
     } catch (clientErr) {
       console.warn('Client-side Gemini identification fallback failed:', clientErr);
