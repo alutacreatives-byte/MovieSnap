@@ -13,7 +13,6 @@ import { sound } from './utils/sound';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<ScreenType>('home');
-  const [selectedDemoMovie, setSelectedDemoMovie] = useState<Movie>(SAMPLE_MOVIES[0]); // Default to The Batman (85% RT, 87% Audience, 7.8 IMDb)
   const [currentMovie, setCurrentMovie] = useState<Movie>(SAMPLE_MOVIES[0]);
   const [historyMovies, setHistoryMovies] = useState<Movie[]>(() => {
     try {
@@ -22,7 +21,7 @@ export default function App() {
     } catch {
       // Fallback
     }
-    return SAMPLE_MOVIES.slice(0, 4);
+    return [];
   });
   const [isMobileFrameView, setIsMobileFrameView] = useState(true);
   const [audioEnabled, setAudioEnabled] = useState(true);
@@ -181,9 +180,8 @@ export default function App() {
                   onStartScan={handleStartScan}
                   onOpenHistory={handleOpenHistory}
                   onSelectMovie={handleSelectMovie}
-                  recentMovies={historyMovies}
-                  selectedDemoMovie={selectedDemoMovie}
-                  onSelectDemoMovie={setSelectedDemoMovie}
+                  popularMovies={SAMPLE_MOVIES}
+                  historyCount={historyMovies.length}
                 />
               </motion.div>
             )}
@@ -198,13 +196,9 @@ export default function App() {
                 className="flex-1 h-full min-h-screen"
               >
                 <ScanningScreen
-                  movieToIdentify={selectedDemoMovie}
                   onIdentified={handleIdentified}
                   onCancel={handleBackToHome}
-                  allMovies={SAMPLE_MOVIES}
-                  onChangeMovie={(m) => {
-                    setSelectedDemoMovie(m);
-                  }}
+                  popularMovies={SAMPLE_MOVIES}
                 />
               </motion.div>
             )}

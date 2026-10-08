@@ -1,5 +1,5 @@
 import React from 'react';
-import { Camera, History, Tv, Sparkles, ChevronRight, Play } from 'lucide-react';
+import { Camera, History, Tv, Sparkles, ChevronRight, TrendingUp } from 'lucide-react';
 import { Movie } from '../types';
 import { TomatoIcon } from './RatingBadges';
 
@@ -7,18 +7,16 @@ interface HomeScreenProps {
   onStartScan: () => void;
   onOpenHistory: () => void;
   onSelectMovie: (movie: Movie) => void;
-  recentMovies: Movie[];
-  selectedDemoMovie: Movie;
-  onSelectDemoMovie: (movie: Movie) => void;
+  popularMovies: Movie[];
+  historyCount: number;
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
   onStartScan,
   onOpenHistory,
   onSelectMovie,
-  recentMovies,
-  selectedDemoMovie,
-  onSelectDemoMovie,
+  popularMovies,
+  historyCount,
 }) => {
   return (
     <div className="flex flex-col min-h-full pb-8">
@@ -48,9 +46,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         >
           <History className="w-3.5 h-3.5 text-rose-400" />
           <span>History</span>
-          <span className="w-4 h-4 rounded-full bg-rose-500/20 text-rose-300 text-[10px] flex items-center justify-center font-bold">
-            {recentMovies.length}
-          </span>
+          {historyCount > 0 && (
+            <span className="w-4 h-4 rounded-full bg-rose-500/20 text-rose-300 text-[10px] flex items-center justify-center font-bold">
+              {historyCount}
+            </span>
+          )}
         </button>
       </header>
 
@@ -67,14 +67,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             onClick={onStartScan}
             className="relative aspect-[4/3] w-full rounded-2xl overflow-hidden cursor-pointer border border-white/10 shadow-2xl bg-neutral-950 flex flex-col items-center justify-center group-hover:border-white/25 transition-all"
           >
-            {/* TV Screen Preview Image */}
+            {/* Living Room Television Scene */}
             <img
-              src={selectedDemoMovie.tvStill}
-              alt="TV scene"
-              className="absolute inset-0 w-full h-full object-cover opacity-75 group-hover:scale-105 transition-transform duration-700 ease-out brightness-90 contrast-110"
+              src="https://images.unsplash.com/photo-1593784991095-a205069470b6?w=1200&auto=format&fit=crop&q=80"
+              alt="Movie playing on TV"
+              className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-700 ease-out brightness-90 contrast-110"
             />
             {/* Subtle television bezel and screen vignette */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-black/60" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/60" />
             <div className="absolute inset-0 shadow-[inset_0_0_80px_rgba(0,0,0,0.8)]" />
 
             {/* Corner Alignment Reticle */}
@@ -90,8 +90,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
               {/* Center Crosshair / Scanning Hint */}
               <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-10 h-10 rounded-full border border-rose-500/50 flex items-center justify-center bg-rose-500/10 backdrop-blur-xs">
-                  <Camera className="w-5 h-5 text-rose-400 animate-pulse" />
+                <div className="w-12 h-12 rounded-full border border-rose-500/60 flex items-center justify-center bg-rose-500/15 backdrop-blur-xs shadow-[0_0_20px_rgba(250,50,10,0.4)]">
+                  <Camera className="w-6 h-6 text-rose-400 animate-pulse" />
                 </div>
               </div>
             </div>
@@ -100,55 +100,25 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <div className="relative z-10 text-center px-4">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/15 text-xs font-semibold text-white mb-2 shadow-lg">
                 <Tv className="w-3.5 h-3.5 text-rose-400" />
-                <span>Live TV Detector</span>
+                <span>Instant Movie Recognition</span>
               </div>
-              <h2 className="text-lg font-bold text-white tracking-tight drop-shadow-md">
+              <h2 className="text-xl font-extrabold text-white tracking-tight drop-shadow-md">
                 Point your phone at your TV.
               </h2>
-              <p className="text-xs text-neutral-300/90 font-medium mt-0.5 drop-shadow">
+              <p className="text-xs text-neutral-300 font-medium mt-1 drop-shadow">
                 Instant Rotten Tomatoes score & movie details
               </p>
             </div>
 
-            {/* Currently playing ticker badge */}
-            <div className="absolute bottom-3 inset-x-3 flex items-center justify-between px-3 py-1.5 rounded-xl bg-black/60 backdrop-blur-md border border-white/10 text-[11px] text-neutral-300">
-              <span className="flex items-center gap-1 text-neutral-400">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                TV Playing:
+            {/* Ready to scan banner */}
+            <div className="absolute bottom-3 inset-x-3 flex items-center justify-between px-3.5 py-1.5 rounded-xl bg-black/70 backdrop-blur-md border border-white/10 text-[11px] text-neutral-300">
+              <span className="flex items-center gap-1.5 text-neutral-300 font-medium">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                Camera Ready
               </span>
-              <span className="font-semibold text-white truncate max-w-[170px]">
-                {selectedDemoMovie.title} ({selectedDemoMovie.year})
+              <span className="font-semibold text-rose-400 flex items-center gap-1">
+                Tap to Scan TV <ChevronRight className="w-3 h-3" />
               </span>
-            </div>
-          </div>
-
-          {/* Quick Demo TV Channel Switcher */}
-          <div className="mt-3.5 pt-3 border-t border-white/10">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-amber-400" />
-                Select Demo TV Scene:
-              </span>
-              <span className="text-[10px] text-neutral-500">Tap to test scan</span>
-            </div>
-            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-              {recentMovies.slice(0, 4).map((movie) => {
-                const isSelected = selectedDemoMovie.id === movie.id;
-                return (
-                  <button
-                    key={movie.id}
-                    onClick={() => onSelectDemoMovie(movie)}
-                    className={`px-2.5 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all flex items-center gap-1.5 border ${
-                      isSelected
-                        ? 'bg-rose-500/20 text-rose-200 border-rose-500/50 shadow-[0_0_12px_rgba(250,50,10,0.3)]'
-                        : 'bg-white/5 text-neutral-400 border-white/10 hover:text-white hover:bg-white/10'
-                    }`}
-                  >
-                    <span>{movie.title}</span>
-                    <span className="text-[10px] opacity-70">({movie.year})</span>
-                  </button>
-                );
-              })}
             </div>
           </div>
         </div>
@@ -165,28 +135,27 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <span className="text-lg uppercase tracking-wider font-extrabold">SCAN MOVIE</span>
           </button>
           <p className="text-center text-[11px] text-neutral-500 mt-2 font-medium">
-            Uses camera & audio-visual fingerprinting to identify the film
+            Opens camera to scan movies playing on your TV or screen
           </p>
         </div>
 
-        {/* Recent Scans Section */}
+        {/* Popular Movies Section */}
         <section className="space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold text-neutral-300 uppercase tracking-wider">
-              Recent Scans
-            </h3>
-            <button
-              onClick={onOpenHistory}
-              className="text-xs text-rose-400 hover:text-rose-300 font-semibold flex items-center gap-0.5 transition-colors"
-            >
-              <span>See All</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
+            <div className="flex items-center gap-1.5">
+              <TrendingUp className="w-3.5 h-3.5 text-rose-400" />
+              <h3 className="text-xs font-bold text-neutral-300 uppercase tracking-wider">
+                Popular Movies
+              </h3>
+            </div>
+            <span className="text-[11px] text-neutral-500 font-medium">
+              Top Rated Scores
+            </span>
           </div>
 
           {/* Horizontal scroll cards */}
           <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2 pt-1 -mx-5 px-5">
-            {recentMovies.map((movie) => (
+            {popularMovies.map((movie) => (
               <div
                 key={movie.id}
                 onClick={() => onSelectMovie(movie)}
@@ -200,7 +169,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
                   {/* RT Tomatometer Badge on top of poster */}
-                  <div className="absolute top-1.5 left-1.5 flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-black/80 backdrop-blur-md border border-white/15 text-[11px] font-extrabold text-white shadow-md">
+                  <div className="absolute top-1.5 left-1.5 flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-black/85 backdrop-blur-md border border-white/15 text-[11px] font-extrabold text-white shadow-md">
                     <TomatoIcon status={movie.rottenTomatoesStatus} size="sm" />
                     <span>{movie.rottenTomatoesScore}%</span>
                   </div>

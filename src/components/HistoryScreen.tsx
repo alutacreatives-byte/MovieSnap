@@ -69,9 +69,13 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
           {filteredMovies.length === 0 ? (
             <div className="glass-surface rounded-3xl p-8 text-center text-neutral-400 mt-6 border border-white/5">
               <Camera className="w-8 h-8 text-neutral-500 mx-auto mb-2" />
-              <p className="text-sm font-semibold text-white">No scans found</p>
+              <p className="text-sm font-semibold text-white">
+                {movies.length === 0 ? 'No movies scanned yet' : 'No matching scans found'}
+              </p>
               <p className="text-xs text-neutral-500 mt-1">
-                Point your phone at your TV to scan your first movie.
+                {movies.length === 0
+                  ? 'Tap Scan Movie to identify a film from your TV, screen or poster.'
+                  : 'Try searching with a different title or keyword.'}
               </p>
             </div>
           ) : (

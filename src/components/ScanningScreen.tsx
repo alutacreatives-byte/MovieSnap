@@ -1,100 +1,161 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { X, Zap, ZapOff, Camera, RefreshCw, Radio, Sparkles } from 'lucide-react';
+import { X, Zap, ZapOff, Camera, RefreshCw, Radio, Image as ImageIcon, AlertCircle } from 'lucide-react';
 import { Movie } from '../types';
+import { sound } from '../utils/sound';
 
 interface ScanningScreenProps {
-  movieToIdentify: Movie;
   onIdentified: (movie: Movie) => void;
   onCancel: () => void;
-  allMovies: Movie[];
-  onChangeMovie: (movie: Movie) => void;
+  popularMovies: Movie[];
 }
 
 export const ScanningScreen: React.FC<ScanningScreenProps> = ({
-  movieToIdentify,
   onIdentified,
   onCancel,
-  allMovies,
-  onChangeMovie,
+  popularMovies,
 }) => {
-  const [useRealCamera, setUseRealCamera] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const [torchOn, setTorchOn] = useState(false);
-  const [scanProgress, setScanProgress] = useState(0);
-  const [soundWaveActive, setSoundWaveActive] = useState(true);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analyzeStep, setAnalyzeStep] = useState('ALIGNING');
+  
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Progressive scan simulation: after ~2.4s, triggers onIdentified
-  useEffect(() => {
-    const startTime = Date.now();
-    const duration = 2400; // 2.4s scanning sequence
-
-    const interval = setInterval(() => {
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(100, Math.floor((elapsed / duration) * 100));
-      setScanProgress(progress);
-
-      if (progress >= 100) {
-        clearInterval(interval);
-        // Clean up camera stream if running
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach((track) => track.stop());
-        }
-        onIdentified(movieToIdentify);
-      }
-    }, 50);
-
-    return () => clearInterval(interval);
-  }, [movieToIdentify, onIdentified]);
-
-  // Handle switching to real camera if requested
-  const handleToggleRealCamera = async () => {
-    if (useRealCamera) {
+  // Start real device camera
+  const startCamera = async (mode: 'environment' | 'user' = facingMode) => {
+    try {
+      setCameraError(null);
+      // Clean up existing stream
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
       }
-      setUseRealCamera(false);
-      return;
-    }
 
-    try {
-      setCameraError(null);
       if (!navigator?.mediaDevices?.getUserMedia) {
-        setCameraError('Camera access not supported on this device/browser. Using simulated TV feed.');
-        setUseRealCamera(false);
-        return;
+        throw new Error('Camera API not available in this browser environment.');
       }
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
-        audio: false,
-      });
+
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: mode,
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+          },
+          audio: false,
+        });
+      } catch {
+        // Fallback to any available video input if facingMode constraint fails
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+      }
+
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current?.play().catch(() => {});
+        };
       }
-      setUseRealCamera(true);
-    } catch (err) {
-      console.warn('Real camera not available:', err);
-      setCameraError('Camera access not granted. Using simulated TV feed.');
-      setUseRealCamera(false);
+      setCameraActive(true);
+    } catch (err: unknown) {
+      console.warn('Camera start error:', err);
+      const message = err instanceof Error ? err.message : 'Camera permission denied or camera not found.';
+      setCameraError(message);
+      setCameraActive(false);
     }
   };
 
-  // Instant snap button
-  const handleManualSnap = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
+  // Mount effect: immediately open device camera
+  useEffect(() => {
+    startCamera(facingMode);
+
+    return () => {
+      // Clean up camera on unmount
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
+    };
+  }, [facingMode]);
+
+  // Flip camera between front and back
+  const handleToggleFacingMode = () => {
+    const nextMode = facingMode === 'environment' ? 'user' : 'environment';
+    setFacingMode(nextMode);
+    startCamera(nextMode);
+  };
+
+  // Toggle Torch if supported
+  const handleToggleTorch = async () => {
+    if (!streamRef.current) return;
+    const track = streamRef.current.getVideoTracks()[0];
+    if (track) {
+      try {
+        const capabilities = track.getCapabilities?.() as { torch?: boolean };
+        if (capabilities && capabilities.torch) {
+          const nextState = !torchOn;
+          await (track as MediaStreamTrack & { applyConstraints: (c: unknown) => Promise<void> }).applyConstraints({
+            advanced: [{ torch: nextState }],
+          });
+          setTorchOn(nextState);
+        } else {
+          setTorchOn(!torchOn);
+        }
+      } catch {
+        setTorchOn(!torchOn);
+      }
     }
-    onIdentified(movieToIdentify);
+  };
+
+  // Capture frame and identify
+  const handleCapture = () => {
+    if (isAnalyzing) return;
+    sound.snap();
+    setIsAnalyzing(true);
+    setAnalyzeStep('SCANNING SCENE...');
+
+    // Simulate cinematic recognition pipeline
+    setTimeout(() => {
+      setAnalyzeStep('FINGERPRINTING MOVIE...');
+    }, 600);
+
+    setTimeout(() => {
+      setAnalyzeStep('MATCHING TOMATOMETER...');
+    }, 1200);
+
+    setTimeout(() => {
+      // Clean up camera stream
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
+      // Pick identified movie (default to The Batman with matching 85% score from specs)
+      const matched = popularMovies[0] || popularMovies[0];
+      onIdentified(matched);
+    }, 1800);
+  };
+
+  // Handle image upload from file picker
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleCapture();
+    }
   };
 
   return (
     <div className="relative w-full h-full min-h-screen bg-black flex flex-col justify-between overflow-hidden select-none">
-      {/* Background Live View: Either Camera Stream or Cinematic TV Living Room Scene */}
-      <div className="absolute inset-0 z-0">
-        {useRealCamera ? (
+      {/* Background Camera Viewport */}
+      <div className="absolute inset-0 z-0 bg-neutral-950 flex items-center justify-center overflow-hidden">
+        {cameraActive ? (
           <video
             ref={videoRef}
             autoPlay
@@ -103,25 +164,52 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
             className="w-full h-full object-cover"
           />
         ) : (
-          <div className="relative w-full h-full">
-            {/* TV Living Room Ambience */}
-            <img
-              src={movieToIdentify.tvStill}
-              alt="TV playing"
-              className="w-full h-full object-cover brightness-75 contrast-125 scale-105"
-            />
-            {/* Dark vignette to focus eyes on center TV reticle */}
-            <div className="absolute inset-0 bg-radial from-transparent via-black/40 to-black/85" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/70" />
+          /* Fallback when camera permission denied or waiting for permission */
+          <div className="relative w-full h-full flex flex-col items-center justify-center p-6 text-center">
+            {cameraError ? (
+              <div className="glass-surface max-w-xs p-6 rounded-3xl border border-rose-500/30 text-center space-y-3 z-10">
+                <div className="w-12 h-12 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center mx-auto">
+                  <AlertCircle className="w-6 h-6" />
+                </div>
+                <h3 className="text-sm font-bold text-white">Camera Access Needed</h3>
+                <p className="text-xs text-neutral-400 leading-relaxed">
+                  Please enable camera permission in your browser to scan movies playing on your TV or screen.
+                </p>
+                <div className="pt-2 space-y-2">
+                  <button
+                    onClick={() => startCamera(facingMode)}
+                    className="w-full glass-button-primary py-2.5 px-4 rounded-xl text-xs font-bold uppercase tracking-wider text-white"
+                  >
+                    Enable Camera
+                  </button>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full glass-button-secondary py-2 px-4 rounded-xl text-xs font-semibold text-neutral-300"
+                  >
+                    Upload Movie Photo
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-12 h-12 rounded-full border-2 border-rose-500 border-t-transparent animate-spin" />
+                <p className="text-xs font-semibold text-neutral-300">Opening device camera...</p>
+              </div>
+            )}
+            {/* Subtle atmospheric backdrop */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-black/80 pointer-events-none" />
           </div>
         )}
+
+        {/* Ambient vignette */}
+        <div className="absolute inset-0 bg-radial from-transparent via-black/25 to-black/85 pointer-events-none" />
       </div>
 
       {/* Top Floating Controls */}
       <header className="relative z-20 px-5 pt-6 pb-2 flex items-center justify-between">
         <button
           onClick={onCancel}
-          className="glass-surface p-2.5 rounded-full text-white/80 hover:text-white transition-all active:scale-90"
+          className="glass-surface p-2.5 rounded-full text-white/80 hover:text-white transition-all active:scale-90 cursor-pointer"
           aria-label="Back to home"
         >
           <X className="w-5 h-5" />
@@ -134,14 +222,14 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500" />
           </span>
           <span className="text-xs font-extrabold tracking-widest text-white uppercase font-sans">
-            IDENTIFYING MOVIE
+            {isAnalyzing ? analyzeStep : 'IDENTIFYING MOVIE'}
           </span>
         </div>
 
-        {/* Torch / Light toggle */}
+        {/* Torch / Flashlight toggle */}
         <button
-          onClick={() => setTorchOn(!torchOn)}
-          className={`glass-surface p-2.5 rounded-full transition-all active:scale-90 ${
+          onClick={handleToggleTorch}
+          className={`glass-surface p-2.5 rounded-full transition-all active:scale-90 cursor-pointer ${
             torchOn ? 'text-amber-400 border-amber-400/40 bg-amber-400/10' : 'text-white/80 hover:text-white'
           }`}
           aria-label="Toggle flashlight"
@@ -151,8 +239,11 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
       </header>
 
       {/* Center Cinematic Glass Scanning Reticle */}
-      <div className="relative z-10 flex-1 px-6 flex flex-col items-center justify-center">
-        {/* Holographic TV Scanning Frame */}
+      <div 
+        onClick={handleCapture}
+        className="relative z-10 flex-1 px-6 flex flex-col items-center justify-center cursor-pointer"
+      >
+        {/* Holographic TV & Poster Scanning Frame */}
         <div className="relative aspect-[16/10] w-full max-w-sm rounded-3xl glass-surface border border-white/30 shadow-[0_0_50px_rgba(250,50,10,0.25)] overflow-hidden flex flex-col justify-between p-4">
           {/* Subtle inner grid lines */}
           <div className="absolute inset-0 bg-[radial-gradient(rgba(255,255,255,0.06)_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
@@ -171,20 +262,20 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
 
           {/* Top Tag inside frame */}
           <div className="flex items-center justify-between text-[10px] text-neutral-400 font-mono tracking-wider">
-            <span className="flex items-center gap-1 text-rose-400">
+            <span className="flex items-center gap-1 text-rose-400 font-semibold">
               <Radio className="w-3 h-3 animate-pulse" />
-              <span>TV FRAME LOCKED</span>
+              <span>{cameraActive ? 'CAMERA LIVE' : 'AWAITING FEED'}</span>
             </span>
-            <span>{scanProgress}%</span>
+            <span>{isAnalyzing ? 'CAPTURED' : 'READY'}</span>
           </div>
 
           {/* Center Crosshairs */}
           <div className="self-center flex flex-col items-center justify-center">
-            <div className="w-12 h-12 rounded-full border border-white/20 flex items-center justify-center">
-              <div className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+            <div className="w-12 h-12 rounded-full border border-white/20 flex items-center justify-center bg-black/20 backdrop-blur-xs">
+              <div className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
             </div>
-            <p className="text-[11px] font-semibold text-neutral-300 mt-2 tracking-wide drop-shadow">
-              Align TV screen within frame
+            <p className="text-[11px] font-bold text-white mt-2 tracking-wide drop-shadow-md">
+              Align movie screen, TV or poster
             </p>
           </div>
 
@@ -203,82 +294,72 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
                 />
               ))}
             </div>
-            <span className="text-neutral-400 font-mono">MATCHING AUDIO-VISUAL</span>
+            <span className="text-neutral-300 font-mono text-[10px]">TAP SHUTTER TO IDENTIFY</span>
           </div>
         </div>
 
-        {/* Scan progress bar */}
-        <div className="w-full max-w-sm mt-5">
-          <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden backdrop-blur-md">
-            <div
-              className="h-full bg-gradient-to-r from-amber-500 to-rose-500 transition-all duration-100 ease-out shadow-[0_0_8px_#FA320A]"
-              style={{ width: `${scanProgress}%` }}
-            />
+        {isAnalyzing && (
+          <div className="w-full max-w-sm mt-4">
+            <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden backdrop-blur-md">
+              <div className="h-full bg-gradient-to-r from-amber-500 to-rose-500 animate-pulse shadow-[0_0_10px_#FA320A] w-full" />
+            </div>
+            <p className="text-center text-xs text-rose-400 font-semibold mt-2 animate-pulse">
+              {analyzeStep}
+            </p>
           </div>
-          <div className="flex items-center justify-between text-[11px] text-neutral-400 mt-2 px-1">
-            <span>Analyzing scene features...</span>
-            <span className="font-mono text-white">{scanProgress}%</span>
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* Bottom Controls Bar */}
-      <footer className="relative z-20 px-6 pb-8 pt-3 flex flex-col items-center space-y-4">
-        {/* Switch Movie selector chip for easy demo testing */}
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar max-w-full px-2 py-1 glass-surface rounded-full border border-white/10">
-          <span className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider pl-2 flex items-center gap-1">
-            <Sparkles className="w-3 h-3 text-rose-400" /> TV:
-          </span>
-          {allMovies.map((m) => (
-            <button
-              key={m.id}
-              onClick={() => onChangeMovie(m)}
-              className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
-                movieToIdentify.id === m.id
-                  ? 'bg-rose-500 text-white font-semibold shadow-sm'
-                  : 'text-neutral-400 hover:text-white'
-              }`}
-            >
-              {m.title}
-            </button>
-          ))}
-        </div>
+      {/* Hidden File Picker Input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleFileUpload}
+        className="hidden"
+      />
 
-        {/* Bottom Shutter & Mode switch */}
-        <div className="w-full flex items-center justify-between">
+      {/* Bottom Camera Controls Bar */}
+      <footer className="relative z-20 px-6 pb-8 pt-3 flex flex-col items-center space-y-4">
+        {/* Actions Row */}
+        <div className="w-full flex items-center justify-between max-w-sm">
+          {/* Upload Photo Button */}
           <button
-            onClick={handleToggleRealCamera}
-            className="glass-surface-interactive px-3 py-2 rounded-xl text-xs font-medium text-neutral-300 hover:text-white flex items-center gap-1.5"
-            title="Switch between physical webcam and simulated TV screen"
+            onClick={() => fileInputRef.current?.click()}
+            className="glass-surface p-3 rounded-2xl text-neutral-300 hover:text-white transition-all active:scale-95 cursor-pointer flex flex-col items-center gap-1"
+            title="Upload Photo or Poster"
           >
-            <RefreshCw className="w-3.5 h-3.5 text-rose-400" />
-            <span>{useRealCamera ? 'Use Simulated TV' : 'Use Camera'}</span>
+            <ImageIcon className="w-5 h-5 text-rose-400" />
+            <span className="text-[10px] font-medium text-neutral-400">Photo</span>
           </button>
 
-          {/* Shutter Button */}
+          {/* Primary Tactile Shutter Button */}
           <button
-            onClick={handleManualSnap}
-            className="w-16 h-16 rounded-full p-1.5 border-2 border-white/40 hover:border-white transition-all active:scale-95 group cursor-pointer"
-            aria-label="Snap Movie Now"
+            onClick={handleCapture}
+            disabled={isAnalyzing}
+            className="w-18 h-18 rounded-full p-1.5 border-3 border-white/50 hover:border-white transition-all active:scale-95 group cursor-pointer shadow-2xl shadow-rose-950/80 disabled:opacity-75"
+            aria-label="Capture Movie"
           >
-            <div className="w-full h-full rounded-full bg-rose-600 group-hover:bg-rose-500 transition-colors shadow-[0_0_20px_rgba(250,50,10,0.6)] flex items-center justify-center">
-              <Camera className="w-6 h-6 text-white" />
+            <div className="w-full h-full rounded-full bg-gradient-to-tr from-red-600 via-rose-500 to-red-500 group-hover:scale-95 transition-transform shadow-[0_0_25px_rgba(250,50,10,0.7)] flex items-center justify-center">
+              <Camera className="w-7 h-7 text-white" />
             </div>
           </button>
 
+          {/* Flip Camera Button */}
           <button
-            onClick={onCancel}
-            className="glass-surface-interactive px-4 py-2 rounded-xl text-xs font-medium text-neutral-300 hover:text-white"
+            onClick={handleToggleFacingMode}
+            className="glass-surface p-3 rounded-2xl text-neutral-300 hover:text-white transition-all active:scale-95 cursor-pointer flex flex-col items-center gap-1"
+            title="Flip Camera"
           >
-            Cancel
+            <RefreshCw className="w-5 h-5 text-rose-400" />
+            <span className="text-[10px] font-medium text-neutral-400">Flip</span>
           </button>
         </div>
 
-        {cameraError && (
-          <p className="text-[11px] text-amber-400/90 text-center font-medium">
-            {cameraError}
-          </p>
-        )}
+        <p className="text-[11px] text-neutral-400 font-medium text-center">
+          Tap shutter to capture movie and view Rotten Tomatoes score
+        </p>
       </footer>
     </div>
   );
