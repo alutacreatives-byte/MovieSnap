@@ -22,34 +22,23 @@ export interface SceneIdentificationResponse {
 }
 
 /**
- * Real visual scene identification handler.
- * Analyzes actors, characters, locations, costumes, cinematography and visual context.
- * Identifies both Movies and TV Series from actual scenes.
+ * Real visual scene identification handler using Gemini vision and Google Search grounding.
  */
 export async function identifySceneFromImage(base64Image: string): Promise<SceneIdentificationResponse> {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || process.env.VITE_GEMINI_API_KEY;
 
   if (!apiKey) {
-    console.error('MovieSnap Error: GEMINI_API_KEY or API_KEY is not defined in environment variables.');
     return {
       identified: false,
-      reason: 'MovieSnap API key (GEMINI_API_KEY) is not configured in the environment.',
+      reason: 'GEMINI_API_KEY is not configured in the environment. Please configure your Gemini API key.',
     };
   }
 
-  // Clean data URL prefix if present
   const base64Data = base64Image.replace(/^data:image\/[a-z]+;base64,/, '');
   const mimeMatch = base64Image.match(/^data:(image\/[a-z]+);base64,/);
   const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
 
-  const ai = new GoogleGenAI({
-    apiKey,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'MovieSnap-Vision-Engine',
-      },
-    },
-  });
+  const ai = new GoogleGenAI({ apiKey });
 
   const prompt = `You are a film and television scene recognition engine.
 Inspect this captured scene image and use Google Search grounding to verify and identify if this image shows a recognizable scene from an existing Movie or TV Series.
@@ -109,12 +98,11 @@ Respond in STRICT JSON format with this exact structure:
 
       const text = response.text?.trim();
       if (text) {
-        // Clean potential markdown code blocks
         const cleanText = text
           .replace(/^```json\s*/i, '')
           .replace(/^```\s*/i, '')
           .replace(/\s*```$/, '');
-        
+
         const parsed = JSON.parse(cleanText);
         if (parsed.identified && parsed.title) {
           const sources: Array<{ name: string; score: string; type: string }> = [];

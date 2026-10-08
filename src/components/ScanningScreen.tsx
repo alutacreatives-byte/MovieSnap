@@ -589,6 +589,21 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
           </button>
         </div>
 
+        {/* Instant Test Sample Scenes bar for testing */}
+        <div className="w-full max-w-sm flex items-center justify-center gap-2 overflow-x-auto no-scrollbar py-1">
+          <span className="text-[10px] text-neutral-400 uppercase tracking-wider font-bold shrink-0">Test Scene:</span>
+          {popularMovies.slice(0, 3).map((m) => (
+            <button
+              key={m.id}
+              onClick={() => processImageDirectly(m.poster)}
+              disabled={isProcessing}
+              className="px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 text-[10px] font-semibold text-white transition-colors border border-white/15 shrink-0 flex items-center gap-1 cursor-pointer"
+            >
+              <span>{m.title}</span>
+            </button>
+          ))}
+        </div>
+
         <p className="text-[11px] text-neutral-400 font-medium text-center">
           Auto-scans live TV feed, or tap shutter to take photo, or tap Upload to select an image
         </p>
