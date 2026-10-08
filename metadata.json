@@ -1,0 +1,10 @@
+{
+  "name": "MovieSnap",
+  "description": "Snap a movie playing on your TV to instantly identify it and see its Rotten Tomatoes score, IMDb rating, and details.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
