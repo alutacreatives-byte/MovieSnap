@@ -41,14 +41,21 @@ export async function identifySceneFromImage(base64Image: string): Promise<Scene
   const mimeMatch = base64Image.match(/^data:(image\/[a-z]+);base64,/);
   const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
 
-  const ai = new GoogleGenAI();
+  const ai = new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      },
+    },
+  });
 
   const prompt = `You are a film and television scene recognition engine.
-Inspect this captured scene image. Determine if this image shows a recognizable scene from an existing Movie or TV Series.
+Inspect this captured scene image and use Google Search to verify and identify if this image shows a recognizable scene from an existing Movie or TV Series.
 Crucial rules:
 1. The image does NOT need to contain the title, poster, text, or subtitles. Use visual information such as recognizable actors, characters, setting, locations, costumes, lighting, cinematography, and production style.
 2. Distinguish clearly whether it is a "Movie" or a "TV Series".
-3. Verify the title against TMDB / IMDb real titles.
+3. Use Google Search grounding to verify the exact title, release year, director, genre, synopsis, IMDb rating, and Rotten Tomatoes score against official IMDb, TMDB, and Rotten Tomatoes databases.
 4. Ratings:
    - Provide the real IMDb rating (e.g. 8.4) if known.
    - If an official Rotten Tomatoes score is publicly known for this title, include it; otherwise set null. Do NOT invent or guess scores.
@@ -94,6 +101,7 @@ Respond in STRICT JSON format with this exact structure:
           },
         ],
         config: {
+          tools: [{ googleSearch: {} }],
           temperature: 0.1,
           responseMimeType: 'application/json',
         },
