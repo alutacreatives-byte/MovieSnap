@@ -140,42 +140,45 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </div>
         </div>
 
-        {/* 3. Three Working Scanning Options: Live Scan, Take Photo, Upload Image */}
-        <div className="space-y-2.5">
-          {/* Option A: Primary Big Button: LIVE SCAN MOVIE */}
-          <button
-            onClick={onStartLiveScan}
-            className="w-full glass-button-primary py-4 px-6 rounded-2xl flex items-center justify-center gap-3 group text-white font-bold text-base tracking-wide cursor-pointer shadow-xl shadow-rose-950/40"
-          >
-            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform">
-              <Camera className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-lg uppercase tracking-wider font-extrabold">Scan</span>
-          </button>
-
-          {/* Options B & C: Quick Action Buttons: Take Photo & Upload Image */}
-          <div className="grid grid-cols-2 gap-2.5">
+        {/* Three Main Scanning Options: Take a Photo, Scan, Upload Image */}
+        <div className="space-y-3">
+          <div className="grid grid-cols-3 gap-2">
             <button
               onClick={onStartPhotoCapture}
-              className="glass-surface-interactive py-3 px-3.5 rounded-2xl flex items-center justify-center gap-2 text-xs font-bold text-neutral-200 hover:text-white border border-white/10"
-              title="Open camera and take a still photo"
+              className="glass-surface-interactive py-3.5 px-2 rounded-2xl flex flex-col items-center justify-center gap-1.5 text-xs font-bold text-neutral-200 hover:text-white border border-white/10 group cursor-pointer"
+              title="Take a Photo"
             >
-              <Camera className="w-4 h-4 text-rose-400 shrink-0" />
-              <span>Take Photo</span>
+              <div className="w-8 h-8 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Camera className="w-4 h-4" />
+              </div>
+              <span className="text-center tracking-tight">Take a Photo</span>
+            </button>
+
+            <button
+              onClick={onStartLiveScan}
+              className="glass-button-primary py-3.5 px-2 rounded-2xl flex flex-col items-center justify-center gap-1.5 text-xs font-extrabold text-white group cursor-pointer shadow-lg shadow-rose-950/40"
+              title="Scan live camera feed"
+            >
+              <div className="w-8 h-8 rounded-full bg-white/20 text-white flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <span className="text-center tracking-tight uppercase">Scan</span>
             </button>
 
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="glass-surface-interactive py-3 px-3.5 rounded-2xl flex items-center justify-center gap-2 text-xs font-bold text-neutral-200 hover:text-white border border-white/10"
-              title="Select a movie poster or screenshot from device"
+              className="glass-surface-interactive py-3.5 px-2 rounded-2xl flex flex-col items-center justify-center gap-1.5 text-xs font-bold text-neutral-200 hover:text-white border border-white/10 group cursor-pointer"
+              title="Upload Image"
             >
-              <Upload className="w-4 h-4 text-rose-400 shrink-0" />
-              <span>Upload Image</span>
+              <div className="w-8 h-8 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Upload className="w-4 h-4" />
+              </div>
+              <span className="text-center tracking-tight">Upload Image</span>
             </button>
           </div>
 
           <p className="text-center text-[11px] text-neutral-500 font-medium">
-            Live scanning auto-detects from video. Take photo or upload to scan any scene.
+            Scan live video, take a photo, or upload an image to identify any scene.
           </p>
         </div>
 
