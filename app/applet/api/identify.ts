@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { GoogleGenAI } from '@google/genai';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 
 export interface SceneIdentificationResponse {
   identified: boolean;
@@ -21,12 +22,8 @@ export interface SceneIdentificationResponse {
   reason?: string;
 }
 
-/**
- * Real visual scene identification handler using Gemini vision and Google Search grounding.
- */
 export async function identifySceneFromImage(base64Image: string): Promise<SceneIdentificationResponse> {
   const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || process.env.VITE_GEMINI_API_KEY;
-
   if (!apiKey) {
     return {
       identified: false,
@@ -40,37 +37,32 @@ export async function identifySceneFromImage(base64Image: string): Promise<Scene
 
   const ai = new GoogleGenAI({ apiKey });
 
-  const prompt = `You are a film and television scene recognition engine.
-Inspect this captured scene image and use Google Search grounding to verify and identify if this image shows a recognizable scene from an existing Movie or TV Series.
-Crucial rules:
-1. The image does NOT need to contain the title, poster, text, or subtitles. Use visual information such as recognizable actors, characters, setting, locations, costumes, lighting, cinematography, and production style.
-2. Distinguish clearly whether it is a "Movie" or a "TV Series".
-3. Use Google Search grounding to verify the exact title, release year, director, genre, synopsis, IMDb rating, and Rotten Tomatoes score against official IMDb, TMDB, and Rotten Tomatoes databases.
-4. Ratings:
-   - Provide the real IMDb rating (e.g. 8.4) if known.
-   - If an official Rotten Tomatoes score is publicly known for this title, include it; otherwise set null. Do NOT invent or guess scores.
-5. If the image is a solid block, blurry, a selfie, random household room, furniture, or cannot be confidently identified as a known movie/TV series:
-   Respond with: {"identified": false, "reason": "Scene not identified. Could not match visual features to a known movie or TV series."}
+  const prompt = `You are an expert film and television scene recognition engine.
+Inspect the provided image and search the web using Google Search grounding to identify the exact Movie or TV Series shown in the scene.
 
-Respond in STRICT JSON format with this exact structure:
+Instructions:
+1. Analyze visual details (characters, actors, set design, costumes, cinematography, distinctive locations) in the image.
+2. Use Google Search grounding to search the web and cross-reference the scene against official movie databases, IMDb, TMDB, and Rotten Tomatoes.
+3. Return the exact verified title, release year, mediaType ("Movie" or "TV Series"), director, genre, synopsis, genuine IMDb rating (e.g. 8.4), and Rotten Tomatoes score (e.g. 92) if available.
+4. If the image cannot be reliably identified, return {"identified": false, "reason": "Scene not identified. Could not match visual features to a known movie or TV series."}.
+
+Respond in STRICT JSON format:
 {
   "identified": true,
   "mediaType": "Movie" or "TV Series",
   "title": "Exact Title",
   "year": 2023,
-  "runtime": "2h 10m" or "45m / ep",
+  "runtime": "2h 10m",
   "genre": ["Sci-Fi", "Drama"],
-  "synopsis": "Concise 1-2 sentence synopsis of the title.",
-  "director": "Director or Creator Name",
-  "imdbRating": 8.5 or null,
-  "rottenTomatoesScore": 92 or null,
-  "rottenTomatoesAudienceScore": 88 or null,
-  "primaryRatingSource": "IMDb" or "Rotten Tomatoes",
+  "synopsis": "Concise summary.",
+  "director": "Director Name",
+  "imdbRating": 8.5,
+  "rottenTomatoesScore": 92,
+  "rottenTomatoesAudienceScore": 88,
   "confidence": 0.95
 }`;
 
   const models = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'];
-
   for (const model of models) {
     try {
       const response = await ai.models.generateContent({
@@ -102,8 +94,8 @@ Respond in STRICT JSON format with this exact structure:
           .replace(/^```json\s*/i, '')
           .replace(/^```\s*/i, '')
           .replace(/\s*```$/, '');
-
         const parsed = JSON.parse(cleanText);
+
         if (parsed.identified && parsed.title) {
           const sources: Array<{ name: string; score: string; type: string }> = [];
           if (parsed.rottenTomatoesScore) {
@@ -153,4 +145,48 @@ Respond in STRICT JSON format with this exact structure:
     identified: false,
     reason: 'Scene not identified. Could not recognize visual features in this image.',
   };
+}
+
+export default async function handler(req: IncomingMessage & { body?: unknown }, res: ServerResponse) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.statusCode = 200;
+    res.end();
+    return;
+  }
+
+  if (req.method !== 'POST') {
+    res.statusCode = 405;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ error: 'Method not allowed' }));
+    return;
+  }
+
+  try {
+    let bodyData = '';
+    for await (const chunk of req) {
+      bodyData += chunk;
+    }
+    const { image } = JSON.parse(bodyData || '{}');
+
+    if (!image) {
+      res.statusCode = 400;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ identified: false, reason: 'No image data provided.' }));
+      return;
+    }
+
+    const result = await identifySceneFromImage(image);
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify(result));
+  } catch (err: unknown) {
+    console.error('API /api/identify error:', err);
+    res.statusCode = 500;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ identified: false, reason: 'Internal error processing scene image.' }));
+  }
 }
