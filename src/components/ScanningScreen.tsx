@@ -61,6 +61,11 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
 
     try {
       setCameraError(null);
+      if (!navigator?.mediaDevices?.getUserMedia) {
+        setCameraError('Camera access not supported on this device/browser. Using simulated TV feed.');
+        setUseRealCamera(false);
+        return;
+      }
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment' },
         audio: false,
