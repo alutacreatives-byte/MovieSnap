@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { 
   ChevronLeft, Zap, ZapOff, Camera, RefreshCw, Radio, 
-  AlertCircle, RotateCcw, HelpCircle, EyeOff
+  RotateCcw, EyeOff, Upload, Sparkles
 } from 'lucide-react';
 import { Movie } from '../types';
 import { sound } from '../utils/sound';
@@ -25,30 +25,37 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
   const [torchOn, setTorchOn] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isLiveAnalyzing, setIsLiveAnalyzing] = useState(false);
   const [identificationFailure, setIdentificationFailure] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const liveScanIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isAnalyzingRef = useRef(false);
 
   // Stop camera tracks cleanly
-  const stopCamera = () => {
+  const stopCamera = useCallback(() => {
+    if (liveScanIntervalRef.current) {
+      clearInterval(liveScanIntervalRef.current);
+      liveScanIntervalRef.current = null;
+    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
     setCameraActive(false);
-  };
+  }, []);
 
-  // 1 & 8. Open device camera with robust error and permission handling
-  const startCamera = async (mode: 'environment' | 'user' = facingMode) => {
+  // 1. Open device camera
+  const startCamera = useCallback(async (mode: 'environment' | 'user' = facingMode) => {
     try {
       setCameraError(null);
       setPermissionDenied(false);
       setIdentificationFailure(null);
       setCapturedPhoto(null);
+      setIsProcessing(false);
 
-      // Stop existing tracks before starting a new one
       stopCamera();
 
       if (!navigator?.mediaDevices?.getUserMedia) {
@@ -57,7 +64,6 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
 
       let stream: MediaStream;
       try {
-        // Attempt back camera first for TV scanning
         stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: { ideal: mode },
@@ -67,7 +73,6 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
           audio: false,
         });
       } catch {
-        // Fallback to any available video input (e.g. desktop webcam)
         stream = await navigator.mediaDevices.getUserMedia({
           video: true,
           audio: false,
@@ -76,7 +81,6 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
 
       streamRef.current = stream;
 
-      // 2. Attach stream directly to always-mounted video element
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.muted = true;
@@ -86,7 +90,7 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
           await videoRef.current.play();
           setCameraActive(true);
         } catch (playErr) {
-          console.warn('Video play deferred, waiting for interaction:', playErr);
+          console.warn('Video play deferred:', playErr);
           setCameraActive(true);
         }
       }
@@ -95,12 +99,12 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
       const isDenied = err instanceof DOMException && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError');
       setPermissionDenied(isDenied);
       const msg = isDenied 
-        ? 'Camera permission was not granted. Please allow camera access in your browser settings to scan movies.'
+        ? 'Camera permission was not granted. Please allow camera access in your browser to scan movies.'
         : err instanceof Error ? err.message : 'Could not start camera feed.';
       setCameraError(msg);
       setCameraActive(false);
     }
-  };
+  }, [facingMode, stopCamera]);
 
   // Mount effect
   useEffect(() => {
@@ -109,22 +113,175 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
     return () => {
       stopCamera();
     };
-  }, []);
+  }, [facingMode, startCamera, stopCamera]);
 
-  // 7. Back arrow returns to MovieSnap homepage
+  // Capture current frame from <video> onto canvas
+  const captureFrame = (quality = 0.85): string | null => {
+    if (!videoRef.current) return null;
+    const video = videoRef.current;
+    if (video.videoWidth === 0 || video.videoHeight === 0) return null;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.min(1280, video.videoWidth);
+    canvas.height = Math.min(720, video.videoHeight);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', quality);
+  };
+
+  // 1. Live Continuous Scanning: periodically sample live camera frames
+  useEffect(() => {
+    if (!cameraActive || capturedPhoto || isProcessing || identificationFailure) {
+      if (liveScanIntervalRef.current) {
+        clearInterval(liveScanIntervalRef.current);
+        liveScanIntervalRef.current = null;
+      }
+      return;
+    }
+
+    // Run continuous frame evaluation every 1.8 seconds
+    liveScanIntervalRef.current = setInterval(async () => {
+      if (isAnalyzingRef.current || !videoRef.current || videoRef.current.paused) return;
+
+      const frameDataUrl = captureFrame(0.7);
+      if (!frameDataUrl) return;
+
+      try {
+        isAnalyzingRef.current = true;
+        setIsLiveAnalyzing(true);
+
+        const result: IdentificationResult = await identifyMovieFromImage(frameDataUrl, popularMovies);
+
+        if (result.identified && result.movie) {
+          // Movie identified live without taking photo!
+          sound.success();
+          stopCamera();
+          onIdentified(result.movie);
+        }
+      } catch (err) {
+        console.warn('Live frame analysis check:', err);
+      } finally {
+        isAnalyzingRef.current = false;
+        setIsLiveAnalyzing(false);
+      }
+    }, 1800);
+
+    return () => {
+      if (liveScanIntervalRef.current) {
+        clearInterval(liveScanIntervalRef.current);
+        liveScanIntervalRef.current = null;
+      }
+    };
+  }, [cameraActive, capturedPhoto, isProcessing, identificationFailure, popularMovies, onIdentified, stopCamera]);
+
+  // 2. Take a photo & analyze captured image
+  const handleCapturePhoto = async () => {
+    if (isProcessing) return;
+
+    const photoDataUrl = captureFrame(0.9);
+    if (!photoDataUrl) {
+      setCameraError('Unable to capture frame. Please ensure camera is active.');
+      return;
+    }
+
+    sound.snap();
+    setCapturedPhoto(photoDataUrl);
+    setIsProcessing(true);
+    setIdentificationFailure(null);
+
+    if (videoRef.current) {
+      videoRef.current.pause();
+    }
+
+    try {
+      const result: IdentificationResult = await identifyMovieFromImage(photoDataUrl, popularMovies);
+
+      setIsProcessing(false);
+
+      if (result.identified && result.movie) {
+        sound.success();
+        stopCamera();
+        onIdentified(result.movie);
+      } else {
+        // Clear message if identification fails
+        setIdentificationFailure(
+          result.reason || 'Movie not identified. No matching movie scene or poster recognized in the captured photo.'
+        );
+      }
+    } catch (err) {
+      console.error('Photo analysis error:', err);
+      setIsProcessing(false);
+      setIdentificationFailure('Movie not identified. Error analyzing photo. Please retake the photo.');
+    }
+  };
+
+  // 3. Upload an image from device & analyze
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const dataUrl = event.target?.result as string;
+        if (dataUrl) {
+          sound.snap();
+          setCapturedPhoto(dataUrl);
+          setIsProcessing(true);
+          setIdentificationFailure(null);
+
+          if (videoRef.current) {
+            videoRef.current.pause();
+          }
+
+          try {
+            const result: IdentificationResult = await identifyMovieFromImage(dataUrl, popularMovies);
+            setIsProcessing(false);
+
+            if (result.identified && result.movie) {
+              sound.success();
+              stopCamera();
+              onIdentified(result.movie);
+            } else {
+              setIdentificationFailure(
+                result.reason || 'Movie not identified. Could not recognize any movie in the uploaded image.'
+              );
+            }
+          } catch (err) {
+            console.error('Uploaded image analysis error:', err);
+            setIsProcessing(false);
+            setIdentificationFailure('Movie not identified. Error analyzing uploaded image. Please try another image.');
+          }
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Back arrow returns to MovieSnap homepage
   const handleBackToHome = () => {
     stopCamera();
     onCancel();
   };
 
-  // Flip front/back camera
+  // Retake photo or resume live camera
+  const handleRetake = () => {
+    setCapturedPhoto(null);
+    setIdentificationFailure(null);
+    setIsProcessing(false);
+    if (videoRef.current) {
+      videoRef.current.play().catch(() => {});
+    }
+  };
+
+  // Toggle front/back camera
   const handleToggleFacingMode = () => {
     const nextMode = facingMode === 'environment' ? 'user' : 'environment';
     setFacingMode(nextMode);
     startCamera(nextMode);
   };
 
-  // Torch toggle
+  // Toggle Torch / Flashlight
   const handleToggleTorch = async () => {
     if (!streamRef.current) return;
     const track = streamRef.current.getVideoTracks()[0];
@@ -146,113 +303,11 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
     }
   };
 
-  // 4. Capture photo from active camera
-  const capturePhotoFromVideo = (): string | null => {
-    if (!videoRef.current) return null;
-    const video = videoRef.current;
-    
-    // Fallback dimensions if video metadata not yet loaded
-    const width = video.videoWidth || 1280;
-    const height = video.videoHeight || 720;
-    
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return null;
-
-    ctx.drawImage(video, 0, 0, width, height);
-    return canvas.toDataURL('image/jpeg', 0.9);
-  };
-
-  // 5 & 6. Process captured image without fake guessing or hardcoded Batman
-  const handleCaptureAndIdentify = async () => {
-    if (isProcessing) return;
-
-    const photoDataUrl = capturePhotoFromVideo();
-    if (!photoDataUrl) {
-      setCameraError('Unable to capture frame from camera. Ensure the camera is active and try again.');
-      return;
-    }
-
-    // Play camera snap sound & freeze frame
-    sound.snap();
-    setCapturedPhoto(photoDataUrl);
-    setIsProcessing(true);
-    setIdentificationFailure(null);
-
-    // Pause video while processing
-    if (videoRef.current) {
-      videoRef.current.pause();
-    }
-
-    try {
-      // Real movie identification from the captured photo
-      const result: IdentificationResult = await identifyMovieFromImage(photoDataUrl, popularMovies);
-
-      setIsProcessing(false);
-
-      if (result.identified && result.movie) {
-        sound.success();
-        stopCamera();
-        onIdentified(result.movie);
-      } else {
-        // 6. Show clear "Movie not identified" result instead of guessing
-        setIdentificationFailure(
-          result.reason || 'Movie not identified. Could not recognize any movie scene or poster in the captured photo.'
-        );
-      }
-    } catch (err) {
-      console.error('Identification error:', err);
-      setIsProcessing(false);
-      setIdentificationFailure('Movie not identified. Error analyzing image. Please retake the photo.');
-    }
-  };
-
-  // Retake photo
-  const handleRetake = () => {
-    setCapturedPhoto(null);
-    setIdentificationFailure(null);
-    setIsProcessing(false);
-    if (videoRef.current) {
-      videoRef.current.play().catch(() => {});
-    }
-  };
-
-  // File picker fallback for testing
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        const dataUrl = event.target?.result as string;
-        if (dataUrl) {
-          setCapturedPhoto(dataUrl);
-          setIsProcessing(true);
-          setIdentificationFailure(null);
-          
-          const result = await identifyMovieFromImage(dataUrl, popularMovies);
-          setIsProcessing(false);
-
-          if (result.identified && result.movie) {
-            sound.success();
-            stopCamera();
-            onIdentified(result.movie);
-          } else {
-            setIdentificationFailure(
-              result.reason || 'Movie not identified from selected image.'
-            );
-          }
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
   return (
     <div className="relative w-full h-full min-h-screen bg-black flex flex-col justify-between overflow-hidden select-none">
-      {/* 2. Video element is ALWAYS mounted to guarantee the live stream displays immediately */}
+      {/* Live Video / Captured Photo Viewport */}
       <div className="absolute inset-0 z-0 bg-neutral-950 flex items-center justify-center overflow-hidden">
+        {/* Live Camera Video (permanently mounted) */}
         <video
           ref={videoRef}
           autoPlay
@@ -263,7 +318,7 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
           }`}
         />
 
-        {/* Frozen photo overlay when photo is captured */}
+        {/* Frozen Photo View (active when photo captured or uploaded) */}
         {capturedPhoto && (
           <img
             src={capturedPhoto}
@@ -272,7 +327,7 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
           />
         )}
 
-        {/* 3. Clear option to allow camera access if permission has not been granted */}
+        {/* Camera Permission Required View */}
         {!cameraActive && !capturedPhoto && (
           <div className="relative z-10 p-6 max-w-xs text-center space-y-4">
             <div className="w-16 h-16 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center justify-center mx-auto shadow-lg shadow-rose-950/50">
@@ -285,8 +340,8 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
               </h2>
               <p className="text-xs text-neutral-400 mt-1.5 leading-relaxed">
                 {permissionDenied
-                  ? 'Camera permission was denied. Please allow camera access in your browser or address bar settings to scan your TV.'
-                  : 'MovieSnap uses your device camera to identify movies playing on your TV screen or posters.'}
+                  ? 'Camera permission was not granted. Please allow camera access in your browser settings to scan movies.'
+                  : 'MovieSnap uses your device camera to continuously identify movies playing on your TV screen or posters.'}
               </p>
             </div>
 
@@ -300,9 +355,10 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
 
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="w-full glass-button-secondary py-2.5 px-4 rounded-xl text-xs font-semibold text-neutral-300 cursor-pointer"
+                className="w-full glass-button-secondary py-2.5 px-4 rounded-xl text-xs font-semibold text-neutral-300 cursor-pointer flex items-center justify-center gap-1.5"
               >
-                Select Movie Photo
+                <Upload className="w-4 h-4 text-rose-400" />
+                <span>Upload Movie Photo</span>
               </button>
             </div>
           </div>
@@ -314,7 +370,7 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
 
       {/* Top Floating Controls */}
       <header className="relative z-20 px-5 pt-6 pb-2 flex items-center justify-between">
-        {/* 7. The Back arrow on the scanning screen must return to the MovieSnap homepage */}
+        {/* Back arrow returns to MovieSnap homepage */}
         <button
           onClick={handleBackToHome}
           className="glass-surface p-2.5 rounded-full text-white/90 hover:text-white transition-all active:scale-90 cursor-pointer"
@@ -330,14 +386,16 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500" />
           </span>
-          <span className="text-xs font-extrabold tracking-widest text-white uppercase font-sans">
+          <span className="text-xs font-extrabold tracking-widest text-white uppercase font-sans flex items-center gap-1">
             {isProcessing
-              ? 'IDENTIFYING...'
+              ? 'ANALYZING PHOTO...'
               : capturedPhoto
               ? 'PHOTO CAPTURED'
+              : isLiveAnalyzing
+              ? 'IDENTIFYING LIVE...'
               : cameraActive
-              ? 'LIVE CAMERA'
-              : 'READY TO SCAN'}
+              ? 'LIVE SCANNING TV'
+              : 'CAMERA STANDBY'}
           </span>
         </div>
 
@@ -354,9 +412,9 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
         </button>
       </header>
 
-      {/* Center Reticle & Results Container */}
+      {/* Center Reticle & Results Area */}
       <div className="relative z-10 flex-1 px-6 flex flex-col items-center justify-center">
-        {/* 6. Clear "Movie not identified" result instead of guessing or returning Batman */}
+        {/* Clear "Movie Not Identified" result card if recognition fails */}
         {identificationFailure ? (
           <div className="glass-surface w-full max-w-sm rounded-3xl p-6 border border-rose-500/30 shadow-2xl text-center space-y-4 animate-in fade-in zoom-in-95 duration-200">
             <div className="w-14 h-14 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center mx-auto shadow-md">
@@ -373,11 +431,11 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
             </div>
 
             <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/10 text-[11px] text-neutral-400 text-left space-y-1">
-              <p className="font-semibold text-neutral-300">Tips for a successful scan:</p>
+              <p className="font-semibold text-neutral-300">Tips for movie identification:</p>
               <ul className="list-disc pl-4 space-y-0.5">
-                <li>Align the TV screen or movie poster inside the frame</li>
-                <li>Avoid heavy glare or extreme viewing angles</li>
-                <li>Ensure adequate room lighting</li>
+                <li>Point directly at your TV screen or a movie poster</li>
+                <li>Ensure the title, character or movie scene is clear and in focus</li>
+                <li>Avoid excessive glare or harsh reflections on the screen</li>
               </ul>
             </div>
 
@@ -387,7 +445,7 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
                 className="flex-1 glass-button-primary py-3 rounded-xl text-xs font-bold uppercase tracking-wider text-white flex items-center justify-center gap-2 cursor-pointer"
               >
                 <RotateCcw className="w-4 h-4" />
-                <span>Retake Photo</span>
+                <span>Try Again</span>
               </button>
               
               <button
@@ -404,7 +462,7 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
             {/* Subtle inner grid lines */}
             <div className="absolute inset-0 bg-[radial-gradient(rgba(255,255,255,0.06)_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
 
-            {/* Sweeping Laser Line (Active while camera is live) */}
+            {/* Sweeping Laser Line (Active while camera is scanning) */}
             {!capturedPhoto && cameraActive && (
               <div className="absolute inset-x-0 scanning-laser-line pointer-events-none z-10">
                 <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-rose-500 to-transparent shadow-[0_0_15px_#FA320A,0_0_5px_#FFF]" />
@@ -422,9 +480,12 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
             <div className="flex items-center justify-between text-[10px] text-neutral-400 font-mono tracking-wider">
               <span className="flex items-center gap-1 text-rose-400 font-semibold">
                 <Radio className="w-3 h-3 animate-pulse" />
-                <span>{cameraActive ? 'TV FRAME LOCKED' : 'CAMERA STANDBY'}</span>
+                <span>{cameraActive ? 'TV FRAME LOCKED' : 'STANDBY'}</span>
               </span>
-              <span>{isProcessing ? 'ANALYZING' : capturedPhoto ? 'FROZEN' : 'ALIGNED'}</span>
+              <span className="flex items-center gap-1 text-neutral-300">
+                <Sparkles className="w-3 h-3 text-amber-400 animate-pulse" />
+                <span>{isLiveAnalyzing ? 'ANALYZING LIVE...' : 'AUTO-SCAN ON'}</span>
+              </span>
             </div>
 
             {/* Center Crosshairs */}
@@ -432,8 +493,10 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
               <div className="w-12 h-12 rounded-full border border-white/20 flex items-center justify-center bg-black/20 backdrop-blur-xs">
                 <div className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
               </div>
-              <p className="text-[11px] font-bold text-white mt-2 tracking-wide drop-shadow-md">
-                {capturedPhoto ? 'Processing photo...' : 'Align TV screen or movie poster'}
+              <p className="text-[11px] font-bold text-white mt-2 tracking-wide drop-shadow-md text-center">
+                {capturedPhoto
+                  ? 'Processing captured image...'
+                  : 'Point at TV screen or movie poster'}
               </p>
             </div>
 
@@ -453,7 +516,7 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
                 ))}
               </div>
               <span className="text-neutral-300 font-mono text-[10px]">
-                {capturedPhoto ? 'EXTRACTING SCENE' : 'TAP SHUTTER TO CAPTURE'}
+                {capturedPhoto ? 'EXTRACTING MOVIE' : 'AUTO-IDENTIFYING OR TAP SHUTTER'}
               </span>
             </div>
           </div>
@@ -466,19 +529,18 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
               <div className="h-full bg-gradient-to-r from-amber-500 via-rose-500 to-red-600 animate-pulse shadow-[0_0_12px_#FA320A] w-full" />
             </div>
             <p className="text-xs text-rose-400 font-bold mt-2 animate-pulse tracking-wide">
-              Analyzing captured photo...
+              Analyzing image for movie identification...
             </p>
           </div>
         )}
       </div>
 
-      {/* Hidden File Picker Input */}
+      {/* Hidden File Picker Input for uploading images from device */}
       <input
         ref={fileInputRef}
         type="file"
         accept="image/*"
-        capture="environment"
-        onChange={handleFileChange}
+        onChange={handleFileUpload}
         className="hidden"
       />
 
@@ -486,24 +548,24 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
       <footer className="relative z-20 px-6 pb-8 pt-3 flex flex-col items-center space-y-4">
         {/* Controls Row */}
         <div className="w-full flex items-center justify-between max-w-sm">
-          {/* File Picker Option */}
+          {/* 3. Upload an Image Button: Select image from device */}
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isProcessing}
             className="glass-surface p-3 rounded-2xl text-neutral-300 hover:text-white transition-all active:scale-95 cursor-pointer flex flex-col items-center gap-1 disabled:opacity-50"
-            title="Upload Photo or Poster"
+            title="Upload Movie Image from Device"
           >
-            <Camera className="w-5 h-5 text-rose-400" />
+            <Upload className="w-5 h-5 text-rose-400" />
             <span className="text-[10px] font-medium text-neutral-400">Upload</span>
           </button>
 
-          {/* 4. Primary Tactile Shutter Button: Captures photo using the camera */}
+          {/* 2. Primary Tactile Shutter Button: Take a photo manually */}
           <button
-            onClick={handleCaptureAndIdentify}
+            onClick={handleCapturePhoto}
             disabled={isProcessing || !cameraActive}
             className="w-18 h-18 rounded-full p-1.5 border-3 border-white/50 hover:border-white transition-all active:scale-95 group cursor-pointer shadow-2xl shadow-rose-950/80 disabled:opacity-50"
-            aria-label="Capture Photo"
-            title="Capture Photo"
+            aria-label="Take Photo"
+            title="Take Photo"
           >
             <div className="w-full h-full rounded-full bg-gradient-to-tr from-red-600 via-rose-500 to-red-500 group-hover:scale-95 transition-transform shadow-[0_0_25px_rgba(250,50,10,0.7)] flex items-center justify-center">
               <Camera className="w-7 h-7 text-white" />
@@ -523,7 +585,7 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
         </div>
 
         <p className="text-[11px] text-neutral-400 font-medium text-center">
-          Tap the shutter button to take a photo of your TV or movie poster
+          Auto-scans live TV feed, or tap shutter to take a photo, or tap Upload to pick an image
         </p>
       </footer>
     </div>
