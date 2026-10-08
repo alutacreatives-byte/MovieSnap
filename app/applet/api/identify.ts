@@ -24,27 +24,24 @@ export interface SceneIdentificationResponse {
 
 export async function identifySceneFromImage(base64Image: string): Promise<SceneIdentificationResponse> {
   const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || process.env.VITE_GEMINI_API_KEY;
-  if (!apiKey) {
-    return {
-      identified: false,
-      reason: 'GEMINI_API_KEY is not configured in the environment. Please configure your Gemini API key.',
-    };
-  }
-
+  
   const base64Data = base64Image.replace(/^data:image\/[a-z]+;base64,/, '');
   const mimeMatch = base64Image.match(/^data:(image\/[a-z]+);base64,/);
   const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
 
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI(apiKey ? { apiKey } : undefined);
+  const models = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'];
 
-  const prompt = `You are an expert film and television scene recognition engine.
-Inspect the provided image and search the web using Google Search grounding to identify the exact Movie or TV Series shown in the scene.
+  for (const model of models) {
+    try {
+      const prompt = `You are an expert film and television scene recognition engine with live Google Search web grounding.
+1. Inspect the provided image and analyze its visual features (actors, characters, set design, costumes, cinematography, location, text).
+2. Perform an actual web search using Google Search grounding across IMDb, TMDB, and Rotten Tomatoes to find matching movie or TV series titles.
+3. Compare the visual scene with the search results and return the best-supported match.
+4. Retrieve genuine ratings (IMDb rating, Rotten Tomatoes score), release year, director, genre, and synopsis.
 
-Instructions:
-1. Analyze visual details (characters, actors, set design, costumes, cinematography, distinctive locations) in the image.
-2. Use Google Search grounding to search the web and cross-reference the scene against official movie databases, IMDb, TMDB, and Rotten Tomatoes.
-3. Return the exact verified title, release year, mediaType ("Movie" or "TV Series"), director, genre, synopsis, genuine IMDb rating (e.g. 8.4), and Rotten Tomatoes score (e.g. 92) if available.
-4. If the image cannot be reliably identified, return {"identified": false, "reason": "Scene not identified. Could not match visual features to a known movie or TV series."}.
+If the image cannot be reliably identified, return:
+{"identified": false, "reason": "Scene not identified. Could not match visual features to a known movie or TV series."}
 
 Respond in STRICT JSON format:
 {
@@ -62,9 +59,6 @@ Respond in STRICT JSON format:
   "confidence": 0.95
 }`;
 
-  const models = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'];
-  for (const model of models) {
-    try {
       const response = await ai.models.generateContent({
         model,
         contents: [
@@ -98,14 +92,14 @@ Respond in STRICT JSON format:
 
         if (parsed.identified && parsed.title) {
           const sources: Array<{ name: string; score: string; type: string }> = [];
-          if (parsed.rottenTomatoesScore) {
+          if (typeof parsed.rottenTomatoesScore === 'number') {
             sources.push({
               name: 'Rotten Tomatoes',
               score: `${parsed.rottenTomatoesScore}%`,
               type: 'critic',
             });
           }
-          if (parsed.imdbRating) {
+          if (typeof parsed.imdbRating === 'number') {
             sources.push({
               name: 'IMDb',
               score: `${parsed.imdbRating}/10`,
@@ -128,11 +122,6 @@ Respond in STRICT JSON format:
             ratingSource: parsed.rottenTomatoesScore ? 'Rotten Tomatoes' : parsed.imdbRating ? 'IMDb' : 'The Movie Database (TMDB)',
             sources,
             confidence: parsed.confidence || 0.9,
-          };
-        } else {
-          return {
-            identified: false,
-            reason: parsed.reason || 'Scene not identified. Could not match visual features to a known movie or TV series.',
           };
         }
       }
