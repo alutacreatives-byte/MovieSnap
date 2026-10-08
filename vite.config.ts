@@ -6,11 +6,42 @@ import { defineConfig } from 'vite';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+function apiPlugin() {
+  return {
+    name: 'api-identify-plugin',
+    configureServer(server: any) {
+      server.middlewares.use('/api/identify', async (req: any, res: any) => {
+        if (req.method === 'POST') {
+          try {
+            let body = '';
+            for await (const chunk of req) {
+              body += chunk;
+            }
+            const { image } = JSON.parse(body || '{}');
+            const { identifySceneFromImage } = await import('./api/identifyHandler');
+            const result = await identifySceneFromImage(image || '');
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify(result));
+          } catch (e: any) {
+            console.error('Dev API error:', e);
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ identified: false, reason: 'Error analyzing scene image.' }));
+          }
+        } else {
+          res.statusCode = 405;
+          res.end('Method Not Allowed');
+        }
+      });
+    },
+  };
+}
+
 export default defineConfig(() => {
   return {
     root: __dirname,
     base: '/',
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), apiPlugin()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

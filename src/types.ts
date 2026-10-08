@@ -24,6 +24,7 @@ export interface RatingSource {
 
 export interface Movie {
   id: string;
+  mediaType?: 'Movie' | 'TV Series';
   title: string;
   tagline: string;
   year: number;

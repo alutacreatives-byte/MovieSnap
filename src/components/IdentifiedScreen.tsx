@@ -101,7 +101,14 @@ export const IdentifiedScreen: React.FC<IdentifiedScreenProps> = ({
             <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-white/10 via-transparent to-transparent pointer-events-none" />
           </div>
 
-          {/* Movie Title */}
+          {/* Verified Media Type: Movie vs TV Series */}
+          <div className="mb-2">
+            <span className="glass-pill-badge px-3 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wider text-rose-400 border border-rose-500/30 shadow-md">
+              {movie.mediaType || 'Movie'}
+            </span>
+          </div>
+
+          {/* Movie / Series Title */}
           <h1 className="text-2xl font-black text-white tracking-tight leading-tight">
             {movie.title}
           </h1>
@@ -126,53 +133,92 @@ export const IdentifiedScreen: React.FC<IdentifiedScreenProps> = ({
           </div>
         </div>
 
-        {/* 5. Hero Ratings Section: Displays exact source for every rating */}
+        {/* Hero Ratings Section: Works with legitimate available sources */}
         <section className="space-y-3">
-          {/* HERO: Rotten Tomatoes Score Card */}
-          <div
-            onClick={onViewRatings}
-            className="cursor-pointer relative overflow-hidden rounded-3xl glass-surface p-5 border border-rose-500/30 shadow-[0_20px_50px_-10px_rgba(250,50,10,0.3)] group hover:border-rose-500/50 transition-all active:scale-[0.99]"
-          >
-            <div className="absolute -right-10 -bottom-10 w-36 h-36 bg-rose-600/20 rounded-full blur-2xl pointer-events-none" />
+          {movie.primaryRatingSource === 'Rotten Tomatoes' && movie.rottenTomatoesScore ? (
+            /* Authorized Rotten Tomatoes Score */
+            <div
+              onClick={onViewRatings}
+              className="cursor-pointer relative overflow-hidden rounded-3xl glass-surface p-5 border border-rose-500/30 shadow-[0_20px_50px_-10px_rgba(250,50,10,0.3)] group hover:border-rose-500/50 transition-all active:scale-[0.99]"
+            >
+              <div className="absolute -right-10 -bottom-10 w-36 h-36 bg-rose-600/20 rounded-full blur-2xl pointer-events-none" />
 
-            <div className="relative z-10 flex items-center justify-between">
-              {/* Tomato Icon + Score */}
-              <div className="flex items-center gap-4">
-                <div className="relative">
-                  <TomatoIcon status={movie.rottenTomatoesStatus} size="xl" />
-                  <div className="absolute inset-0 rounded-full bg-rose-500/30 blur-md pointer-events-none" />
+              <div className="relative z-10 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="relative">
+                    <TomatoIcon status={movie.rottenTomatoesStatus} size="xl" />
+                    <div className="absolute inset-0 rounded-full bg-rose-500/30 blur-md pointer-events-none" />
+                  </div>
+                  <div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-4xl font-black text-white tracking-tight font-sans">
+                        {movie.rottenTomatoesScore}%
+                      </span>
+                    </div>
+                    <div className="text-xs font-black uppercase tracking-wider text-rose-400 flex items-center gap-1">
+                      <span>ROTTEN TOMATOES</span>
+                      <span className="text-[10px] text-neutral-400 font-normal">
+                        • {movie.rottenTomatoesStatus === 'certified-fresh' ? 'Certified Fresh' : 'Fresh'}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-neutral-400 font-medium mt-0.5">
+                      Source: Rotten Tomatoes (Tomatometer)
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-4xl font-black text-white tracking-tight font-sans">
-                      {movie.rottenTomatoesScore}%
-                    </span>
-                  </div>
-                  <div className="text-xs font-black uppercase tracking-wider text-rose-400 flex items-center gap-1">
-                    <span>ROTTEN TOMATOES</span>
-                    <span className="text-[10px] text-neutral-400 font-normal">
-                      • {movie.rottenTomatoesStatus === 'certified-fresh' ? 'Certified Fresh' : 'Fresh'}
-                    </span>
-                  </div>
-                  {/* Verified Rating Source Citation */}
-                  <div className="text-[10px] text-neutral-400 font-medium mt-0.5">
-                    Source: Rotten Tomatoes (Tomatometer)
-                  </div>
+
+                <div className="glass-pill-badge px-2.5 py-1 rounded-full text-[11px] font-semibold text-neutral-300 group-hover:text-white flex items-center gap-1">
+                  <span>Score Breakdown</span>
+                  <ArrowRight className="w-3 h-3 text-rose-400" />
                 </div>
               </div>
 
-              {/* View breakdown chevron */}
-              <div className="glass-pill-badge px-2.5 py-1 rounded-full text-[11px] font-semibold text-neutral-300 group-hover:text-white flex items-center gap-1">
-                <span>Score Breakdown</span>
-                <ArrowRight className="w-3 h-3 text-rose-400" />
-              </div>
+              {movie.criticsConsensus && (
+                <p className="mt-3 text-xs text-neutral-300/90 italic line-clamp-2 leading-relaxed border-t border-white/10 pt-2.5">
+                  "{movie.criticsConsensus}"
+                </p>
+              )}
             </div>
+          ) : (
+            /* Legitimate IMDb Hero Rating when Rotten Tomatoes is unavailable */
+            <div
+              onClick={onViewRatings}
+              className="cursor-pointer relative overflow-hidden rounded-3xl glass-surface p-5 border border-amber-500/30 shadow-[0_20px_50px_-10px_rgba(245,158,11,0.25)] group hover:border-amber-500/50 transition-all active:scale-[0.99]"
+            >
+              <div className="absolute -right-10 -bottom-10 w-36 h-36 bg-amber-500/15 rounded-full blur-2xl pointer-events-none" />
 
-            {/* Critics consensus preview quote */}
-            <p className="mt-3 text-xs text-neutral-300/90 italic line-clamp-2 leading-relaxed border-t border-white/10 pt-2.5">
-              "{movie.criticsConsensus}"
-            </p>
-          </div>
+              <div className="relative z-10 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="relative">
+                    <ImdbBadge size="lg" />
+                  </div>
+                  <div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-4xl font-black text-white tracking-tight font-sans">
+                        {movie.imdbRating}
+                      </span>
+                      <span className="text-sm font-semibold text-neutral-400">/ 10</span>
+                    </div>
+                    <div className="text-xs font-black uppercase tracking-wider text-amber-400 flex items-center gap-1">
+                      <span>IMDb RATING</span>
+                    </div>
+                    <div className="text-[10px] text-neutral-400 font-medium mt-0.5">
+                      Source: Internet Movie Database (IMDb)
+                    </div>
+                  </div>
+                </div>
+
+                <div className="glass-pill-badge px-2.5 py-1 rounded-full text-[11px] font-semibold text-neutral-300 group-hover:text-white flex items-center gap-1">
+                  <span>Ratings</span>
+                  <ArrowRight className="w-3 h-3 text-amber-400" />
+                </div>
+              </div>
+
+              <p className="mt-3 text-xs text-neutral-300/90 leading-relaxed border-t border-white/10 pt-2.5">
+                {movie.synopsis}
+              </p>
+            </div>
+          )}
 
           {/* Secondary Ratings Row: Audience Score & IMDb */}
           <div className="grid grid-cols-2 gap-3">

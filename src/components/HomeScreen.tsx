@@ -150,7 +150,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform">
               <Camera className="w-5 h-5 text-white" />
             </div>
-            <span className="text-lg uppercase tracking-wider font-extrabold">LIVE SCAN MOVIE</span>
+            <span className="text-lg uppercase tracking-wider font-extrabold">Scan</span>
           </button>
 
           {/* Options B & C: Quick Action Buttons: Take Photo & Upload Image */}

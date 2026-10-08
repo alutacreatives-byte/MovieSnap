@@ -412,45 +412,53 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
 
       {/* Center Reticle & Results Area */}
       <div className="relative z-10 flex-1 px-6 flex flex-col items-center justify-center">
-        {/* 4. Clear "Movie Not Identified" result card (No Oppenheimer or default guessing) */}
+        {/* Minimal Cinematic No-Results State */}
         {identificationFailure ? (
-          <div className="glass-surface w-full max-w-sm rounded-3xl p-6 border border-rose-500/30 shadow-2xl text-center space-y-4 animate-in fade-in zoom-in-95 duration-200">
+          <div className="glass-surface w-full max-w-sm rounded-3xl p-6 border border-white/15 shadow-2xl text-center space-y-4 animate-in fade-in zoom-in-95 duration-200">
             <div className="w-14 h-14 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center mx-auto shadow-md">
               <EyeOff className="w-7 h-7" />
             </div>
 
             <div className="space-y-1">
               <h3 className="text-base font-extrabold text-white tracking-tight">
-                Movie Not Identified
+                Scene Not Identified
               </h3>
               <p className="text-xs text-neutral-300 leading-relaxed px-2">
-                {identificationFailure}
+                Could not recognize a movie or TV series from this scene.
               </p>
             </div>
 
-            <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/10 text-[11px] text-neutral-400 text-left space-y-1">
-              <p className="font-semibold text-neutral-300">Tips for movie identification:</p>
-              <ul className="list-disc pl-4 space-y-0.5">
-                <li>Point directly at your TV screen or a movie poster</li>
-                <li>Ensure the title, character or movie scene is clear and in focus</li>
-                <li>Avoid excessive glare or harsh reflections on the screen</li>
-              </ul>
-            </div>
-
-            <div className="pt-2 flex gap-2">
+            {/* Clear Actions: Scan Again, Take a Photo, Upload Image */}
+            <div className="pt-2 space-y-2">
               <button
                 onClick={handleRetake}
-                className="flex-1 glass-button-primary py-3 rounded-xl text-xs font-bold uppercase tracking-wider text-white flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full glass-button-primary py-3 rounded-xl text-xs font-bold uppercase tracking-wider text-white flex items-center justify-center gap-2 cursor-pointer"
               >
                 <RotateCcw className="w-4 h-4" />
-                <span>Try Again</span>
+                <span>Scan Again</span>
               </button>
-              
+
+              <button
+                onClick={handleCapturePhoto}
+                className="w-full glass-surface-interactive py-2.5 rounded-xl text-xs font-semibold text-neutral-200 hover:text-white flex items-center justify-center gap-2 cursor-pointer border border-white/10"
+              >
+                <Camera className="w-4 h-4 text-rose-400" />
+                <span>Take a Photo</span>
+              </button>
+
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full glass-surface-interactive py-2.5 rounded-xl text-xs font-semibold text-neutral-200 hover:text-white flex items-center justify-center gap-2 cursor-pointer border border-white/10"
+              >
+                <Upload className="w-4 h-4 text-rose-400" />
+                <span>Upload Image</span>
+              </button>
+
               <button
                 onClick={handleBackToHome}
-                className="px-4 glass-button-secondary rounded-xl text-xs font-semibold text-neutral-300 cursor-pointer"
+                className="w-full py-2 text-xs font-medium text-neutral-400 hover:text-white transition-colors cursor-pointer"
               >
-                Home
+                Return to Home
               </button>
             </div>
           </div>
