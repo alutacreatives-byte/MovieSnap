@@ -125,19 +125,34 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
   }, [initialImage]);
 
   // Capture current frame from <video> onto canvas
-  const captureFrame = (quality = 0.85): string | null => {
+  const captureFrame = (quality = 0.9): string | null => {
     if (!videoRef.current) return null;
     const video = videoRef.current;
-    if (video.videoWidth === 0 || video.videoHeight === 0) return null;
+    const vWidth = video.videoWidth;
+    const vHeight = video.videoHeight;
+    if (vWidth === 0 || vHeight === 0) return null;
 
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.min(1280, video.videoWidth);
-    canvas.height = Math.min(720, video.videoHeight);
-    const ctx = canvas.getContext('2d');
+    const maxDim = 1920;
+    let canvasWidth = vWidth;
+    let canvasHeight = vHeight;
+
+    if (vWidth > maxDim || vHeight > maxDim) {
+      if (vWidth >= vHeight) {
+        canvasWidth = maxDim;
+        canvasHeight = Math.round((vHeight * maxDim) / vWidth);
+      } else {
+        canvasHeight = maxDim;
+        canvasWidth = Math.round((vWidth * maxDim) / vHeight);
+      }
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+    const ctx = canvas.getContext("2d");
     if (!ctx) return null;
-
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL('image/jpeg', quality);
+    ctx.drawImage(video, 0, 0, canvasWidth, canvasHeight);
+    return canvas.toDataURL("image/jpeg", quality);
   };
 
   // Process any image directly (from upload or capture)
