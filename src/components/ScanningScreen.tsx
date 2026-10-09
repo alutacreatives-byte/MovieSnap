@@ -424,7 +424,7 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
                 Scene Not Identified
               </h3>
               <p className="text-xs text-neutral-300 leading-relaxed px-2">
-                Could not recognize a movie or TV series from this scene.
+                {identificationFailure || 'Could not recognize a movie or TV series from this scene.'}
               </p>
             </div>
 

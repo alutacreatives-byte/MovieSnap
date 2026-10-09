@@ -20,12 +20,14 @@ export interface SceneIdentificationResponse {
   backdropUrl?: string;
   confidence?: number;
   reason?: string;
+  detectionMethod?: 'ocr' | 'visual_scene';
+  detectedOcrText?: string;
   searchQueries?: string[];
   searchResultsCount?: number;
 }
 
 /**
- * Performs a real web search using DuckDuckGo HTML search.
+ * Performs a real web search using DuckDuckGo to verify titles and fetch genuine ratings.
  */
 async function searchWeb(query: string): Promise<Array<{ title: string; snippet: string; url?: string }>> {
   try {
@@ -66,10 +68,13 @@ async function searchWeb(query: string): Promise<Array<{ title: string; snippet:
 }
 
 /**
- * Real visual scene identification handler:
- * 1. Uses Gemini vision to describe the visible scene and extract distinctive visual clues.
- * 2. Performs an actual web search using those clues to find matching movie or TV-series titles.
- * 3. Examines the search results, compares them with the image, and returns the best-supported match.
+ * 4-Step Identification Pipeline:
+ * 1. First, use OCR to detect and read any visible movie or TV-series title,
+ *    including Netflix on-screen titles and text.
+ * 2. If no title is visible, use Gemini vision to analyse the scene and identify
+ *    likely movies or TV series from the actors, characters, setting, and visual details.
+ * 3. Search the web to verify the identified title and retrieve its release year and genuine ratings.
+ * 4. Return the verified result, or allow the user to try another frame if unidentifiable.
  */
 export async function identifySceneFromImage(base64Image: string): Promise<SceneIdentificationResponse> {
   const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || process.env.VITE_GEMINI_API_KEY;
@@ -89,103 +94,179 @@ export async function identifySceneFromImage(base64Image: string): Promise<Scene
 
   for (const model of models) {
     try {
-      // Step 1: Use Gemini to analyze the scene and identify distinctive visual clues
-      const visualAnalysisPrompt = `You are an expert film and television scene recognition engine.
-Inspect this captured scene image carefully. Describe the visible scene and identify distinctive visual clues.
-Focus on:
-1. Recognizable actors, characters, costumes, uniforms, or distinctive faces.
-2. Setting, architectural style, specific locations, vehicles, sci-fi/fantasy elements, or distinctive props.
-3. Any visible text, titles, subtitles, names, or quotes.
-4. Characteristic cinematography, color palette, or iconic director style.
+      // -------------------------------------------------------------
+      // Step 1: Optical Character Recognition (OCR) for on-screen titles
+      // -------------------------------------------------------------
+      const ocrPrompt = `You are a high-accuracy OCR (Optical Character Recognition) engine specializing in detecting film and television titles.
+Inspect this image specifically for any visible text, words, logos, or typography:
+1. Scan for on-screen streaming UI titles (especially Netflix title cards, paused video player headers, episode titles, Disney+, Prime Video, HBO Max).
+2. Scan for opening/closing film titles, credits, subtitles containing the title, watermarks, or poster text.
+3. If you find a visible text that represents an actual Movie or TV Series title, extract the exact title.
 
-Based on these clues, formulate two web search queries:
-1. primaryQuery: 4 to 8 specific descriptive keywords likely to find this exact movie or TV series on IMDb/Wikipedia/Rotten Tomatoes.
-2. secondaryQuery: An alternative query focusing on the key actors or distinctive action.
+Ignore generic UI buttons like "Skip Intro", "Pause", "Play", "Volume", "10s", or random non-title text unless it names a show or film.
 
-Respond strictly in JSON format:
+Respond in strict JSON:
 {
-  "description": "Concise description of what is shown in the image",
-  "visualClues": ["clue1", "clue2", "clue3"],
-  "primaryQuery": "distinctive keywords movie or tv series",
-  "secondaryQuery": "alternative keywords"
+  "hasVisibleTitle": true/false,
+  "detectedTitle": "Exact Title Found" or null,
+  "detectedTextSnippets": ["visible text 1", "visible text 2"],
+  "confidence": 0.0 to 1.0
 }`;
 
-      const analysisResponse = await ai.models.generateContent({
-        model,
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              { text: visualAnalysisPrompt },
-              {
-                inlineData: {
-                  mimeType,
-                  data: base64Data,
-                },
-              },
-            ],
-          },
-        ],
-        config: {
-          temperature: 0.1,
-          responseMimeType: 'application/json',
-        },
-      });
+      let candidateTitle: string | null = null;
+      let detectionMethod: 'ocr' | 'visual_scene' = 'visual_scene';
+      let ocrExtractedText = '';
 
-      const analysisText = analysisResponse.text?.trim();
-      let primaryQuery = 'scene movie or tv series';
-      let secondaryQuery = '';
-      if (analysisText) {
-        try {
-          const parsedAnalysis = JSON.parse(analysisText);
-          if (parsedAnalysis.primaryQuery) primaryQuery = parsedAnalysis.primaryQuery;
-          if (parsedAnalysis.secondaryQuery) secondaryQuery = parsedAnalysis.secondaryQuery;
-        } catch {
-          // fallback
+      try {
+        const ocrResponse = await ai.models.generateContent({
+          model,
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                { text: ocrPrompt },
+                {
+                  inlineData: {
+                    mimeType,
+                    data: base64Data,
+                  },
+                },
+              ],
+            },
+          ],
+          config: {
+            temperature: 0.1,
+            responseMimeType: 'application/json',
+          },
+        });
+
+        const ocrText = ocrResponse.text?.trim();
+        if (ocrText) {
+          const cleanOcr = ocrText.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/, '');
+          const ocrParsed = JSON.parse(cleanOcr);
+          if (ocrParsed.hasVisibleTitle && ocrParsed.detectedTitle && typeof ocrParsed.detectedTitle === 'string') {
+            const rawTitle = ocrParsed.detectedTitle.trim();
+            // Filter out generic streaming platform names mistaken for titles
+            const invalidGenericNames = ['netflix', 'prime video', 'disney+', 'hbo max', 'max', 'hulu', 'youtube', 'apple tv'];
+            if (!invalidGenericNames.includes(rawTitle.toLowerCase())) {
+              candidateTitle = rawTitle;
+              detectionMethod = 'ocr';
+              ocrExtractedText = rawTitle;
+            }
+          }
+        }
+      } catch (ocrErr) {
+        console.warn('OCR detection step warning:', ocrErr);
+      }
+
+      // -------------------------------------------------------------
+      // Step 2: Visual Scene Analysis (if no title was detected via OCR)
+      // -------------------------------------------------------------
+      let visualSearchQuery = '';
+      if (!candidateTitle) {
+        const scenePrompt = `You are an expert film and television scene recognition engine.
+No title was clearly read from OCR in this image.
+Inspect the visible visual scene in detail:
+1. Identify notable actors, characters, facial likenesses, costumes, and uniforms.
+2. Examine the setting, location, cinematography, distinctive props, vehicles, or iconic staging.
+3. Determine the most likely Movie or TV Series shown in this scene.
+
+Respond in strict JSON:
+{
+  "identifiedLikelyTitle": "Most Likely Title" or null,
+  "actorsOrCharacters": ["Actor/Character 1", "Actor/Character 2"],
+  "sceneDescription": "Detailed visual description of the scene",
+  "searchQuery": "4-7 specific keywords (actors, setting, distinguishing elements) to verify this movie on IMDb/Wikipedia"
+}`;
+
+        const sceneResponse = await ai.models.generateContent({
+          model,
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                { text: scenePrompt },
+                {
+                  inlineData: {
+                    mimeType,
+                    data: base64Data,
+                  },
+                },
+              ],
+            },
+          ],
+          config: {
+            temperature: 0.1,
+            responseMimeType: 'application/json',
+          },
+        });
+
+        const sceneText = sceneResponse.text?.trim();
+        if (sceneText) {
+          const cleanScene = sceneText.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/, '');
+          const sceneParsed = JSON.parse(cleanScene);
+          if (sceneParsed.identifiedLikelyTitle) {
+            candidateTitle = sceneParsed.identifiedLikelyTitle;
+            detectionMethod = 'visual_scene';
+          }
+          if (sceneParsed.searchQuery) {
+            visualSearchQuery = sceneParsed.searchQuery;
+          }
         }
       }
 
-      // Step 2: Perform an actual web search using those clues
-      const primaryResults = await searchWeb(primaryQuery);
-      let searchResults = primaryResults;
-      if (searchResults.length < 3 && secondaryQuery) {
-        const secondaryResults = await searchWeb(secondaryQuery);
-        searchResults = [...searchResults, ...secondaryResults];
+      // If neither OCR nor visual scene analysis found any plausible candidate
+      if (!candidateTitle && !visualSearchQuery) {
+        return {
+          identified: false,
+          reason: 'Title could not be confidently identified from this frame. Please point clearly at the screen, logo, or try another frame.',
+        };
       }
 
-      // Step 3: Examine the search results, compare them with the image, and return the best-supported match
-      const comparisonPrompt = `You are a film and television scene verification engine.
-You are given an image from a movie or TV series scene, and ACTUAL WEB SEARCH RESULTS obtained by searching the web for the visual clues in this image.
+      // -------------------------------------------------------------
+      // Step 3: Search the web to verify the title and retrieve genuine ratings
+      // -------------------------------------------------------------
+      const searchQuery = candidateTitle
+        ? `${candidateTitle} movie OR "tv series" Rotten Tomatoes IMDb rating release year`
+        : `${visualSearchQuery} movie OR tv series`;
 
+      const searchResults = await searchWeb(searchQuery);
+
+      // Verify and synthesize findings with Gemini
+      const verificationPrompt = `You are a film and television verification engine.
+You are given an image from a screen, photo, or scan, and ACTUAL WEB SEARCH RESULTS:
+
+Candidate Title Detected: ${candidateTitle ? `"${candidateTitle}" (via ${detectionMethod.toUpperCase()})` : 'None specified'}
+Web Search Query: "${searchQuery}"
 Actual Web Search Results:
 ${JSON.stringify(searchResults, null, 2)}
 
 Instructions:
-1. Compare the visible scene in the image directly with the web search results.
-2. Identify which specific Movie or TV Series is shown in the scene. The match must be supported by both the visual evidence and the search results.
-3. If a match is verified, provide:
+1. Examine the web search results and compare them with the image.
+2. Confirm if the candidate title (or another verified title from the search results) matches the actual scene.
+3. If verified, extract:
    - exact title
-   - release year
+   - release year (number)
    - mediaType ("Movie" or "TV Series")
-   - director or show creator
-   - genres
+   - director or series creator
+   - genres (array of strings)
    - runtime (e.g. "2h 10m" or "45m / ep")
    - concise 1-2 sentence synopsis
-   - genuine IMDb rating (e.g. 8.4) if known, else null
-   - genuine Rotten Tomatoes critic score percentage (e.g. 92) if known, else null
-   - genuine Rotten Tomatoes audience score percentage (e.g. 88) if known, else null
-4. If the image cannot be verified as a known movie or TV series (e.g. personal photo, non-film image, or inconclusive clues), return:
-   {"identified": false, "reason": "Clear explanation of what was visible in the image and why it did not match any verified movie or TV series."}
+   - genuine IMDb rating (e.g. 8.4) if found in search results or official data, else null
+   - genuine Rotten Tomatoes critic Tomatometer percentage score (e.g. 92) if found, else null
+   - genuine Rotten Tomatoes audience score percentage (e.g. 88) if found, else null
+4. If the title cannot be verified or does not match the scene, return:
+   {"identified": false, "reason": "Title could not be confidently identified from this frame. Please try another frame or point directly at the screen."}
 
-Respond strictly in JSON format:
+Respond in strict JSON:
 {
   "identified": true,
-  "mediaType": "Movie",
+  "mediaType": "Movie" or "TV Series",
   "title": "Exact Title",
-  "year": 2023,
+  "year": 2022,
   "runtime": "2h 10m",
   "genre": ["Sci-Fi", "Drama"],
-  "synopsis": "Concise synopsis of the movie.",
+  "synopsis": "Concise synopsis.",
   "director": "Director Name",
   "imdbRating": 8.5,
   "rottenTomatoesScore": 92,
@@ -193,13 +274,13 @@ Respond strictly in JSON format:
   "confidence": 0.95
 }`;
 
-      const comparisonResponse = await ai.models.generateContent({
+      const verificationResponse = await ai.models.generateContent({
         model,
         contents: [
           {
             role: 'user',
             parts: [
-              { text: comparisonPrompt },
+              { text: verificationPrompt },
               {
                 inlineData: {
                   mimeType,
@@ -215,13 +296,10 @@ Respond strictly in JSON format:
         },
       });
 
-      const comparisonText = comparisonResponse.text?.trim();
-      if (comparisonText) {
-        const cleanText = comparisonText
-          .replace(/^```json\s*/i, '')
-          .replace(/^```\s*/i, '')
-          .replace(/\s*```$/, '');
-        const parsed = JSON.parse(cleanText);
+      const verifyText = verificationResponse.text?.trim();
+      if (verifyText) {
+        const cleanVerify = verifyText.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/, '');
+        const parsed = JSON.parse(cleanVerify);
 
         if (parsed.identified && parsed.title) {
           const sources: Array<{ name: string; score: string; type: string }> = [];
@@ -259,27 +337,29 @@ Respond strictly in JSON format:
             rottenTomatoesAudienceScore: typeof parsed.rottenTomatoesAudienceScore === 'number' ? parsed.rottenTomatoesAudienceScore : null,
             ratingSource: parsed.rottenTomatoesScore ? 'Rotten Tomatoes' : parsed.imdbRating ? 'IMDb' : 'The Movie Database (TMDB)',
             sources,
-            confidence: parsed.confidence || 0.92,
-            searchQueries: [primaryQuery, ...(secondaryQuery ? [secondaryQuery] : [])],
+            confidence: parsed.confidence || (detectionMethod === 'ocr' ? 0.98 : 0.92),
+            detectionMethod,
+            detectedOcrText: ocrExtractedText || undefined,
+            searchQueries: [searchQuery],
             searchResultsCount: searchResults.length,
           };
         } else {
           return {
             identified: false,
-            reason: parsed.reason || 'Could not verify a matching movie or TV series from the visual scene and web search results.',
-            searchQueries: [primaryQuery],
+            reason: parsed.reason || 'Title could not be confidently identified from this frame. Please try another frame.',
+            searchQueries: [searchQuery],
             searchResultsCount: searchResults.length,
           };
         }
       }
     } catch (err: unknown) {
-      console.warn(`Model ${model} identification attempt failed:`, err);
+      console.warn(`Model ${model} identification pipeline error:`, err);
     }
   }
 
   return {
     identified: false,
-    reason: 'Scene identification could not reach the identification service. Please try again.',
+    reason: 'Title could not be confidently identified from this frame. Please try another frame.',
   };
 }
 
