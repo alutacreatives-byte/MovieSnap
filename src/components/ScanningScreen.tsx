@@ -328,43 +328,6 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
           />
         )}
 
-        {/* Camera Permission Required View */}
-        {!cameraActive && !capturedPhoto && (
-          <div className="relative z-10 p-6 max-w-xs text-center space-y-4">
-            <div className="w-16 h-16 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center justify-center mx-auto shadow-lg shadow-rose-950/50">
-              <Camera className="w-8 h-8" />
-            </div>
-
-            <div>
-              <h2 className="text-base font-bold text-white tracking-tight">
-                Camera Access Needed
-              </h2>
-              <p className="text-xs text-neutral-400 mt-1.5 leading-relaxed">
-                {permissionDenied
-                  ? 'Camera permission was not granted. Please allow camera access in your browser settings to scan movies.'
-                  : 'MovieSnap uses your device camera to continuously identify movies playing on your TV screen or posters.'}
-              </p>
-            </div>
-
-            <div className="space-y-2 pt-1">
-              <button
-                onClick={() => startCamera(facingMode)}
-                className="w-full glass-button-primary py-3 px-4 rounded-xl text-xs font-bold uppercase tracking-wider text-white shadow-xl cursor-pointer"
-              >
-                Allow Camera Access
-              </button>
-
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full glass-button-secondary py-2.5 px-4 rounded-xl text-xs font-semibold text-neutral-300 cursor-pointer flex items-center justify-center gap-1.5"
-              >
-                <Upload className="w-4 h-4 text-rose-400" />
-                <span>Upload Movie Photo</span>
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Ambient Dark Vignette */}
         <div className="absolute inset-0 bg-radial from-transparent via-black/20 to-black/80 pointer-events-none" />
       </div>
