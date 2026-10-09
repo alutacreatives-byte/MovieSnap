@@ -522,9 +522,7 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
                   />
                 ))}
               </div>
-              <span className="text-neutral-300 font-mono text-[10px]">
-                {capturedPhoto ? 'EXTRACTING MOVIE' : 'AUTO-IDENTIFYING OR TAP SHUTTER'}
-              </span>
+              
             </div>
           </div>
         )}
@@ -572,7 +570,6 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
             disabled={isProcessing || !cameraActive}
             className="w-18 h-18 rounded-full p-1.5 border-3 border-white/50 hover:border-white transition-all active:scale-95 group cursor-pointer shadow-2xl shadow-rose-950/80 disabled:opacity-50"
             aria-label="Take Photo"
-            title="Take Photo"
           >
             <div className="w-full h-full rounded-full bg-gradient-to-tr from-red-600 via-rose-500 to-red-500 group-hover:scale-95 transition-transform shadow-[0_0_25px_rgba(250,50,10,0.7)] flex items-center justify-center">
               <Camera className="w-7 h-7 text-white" />

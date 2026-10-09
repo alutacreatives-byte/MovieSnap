@@ -146,7 +146,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <button
               onClick={onStartPhotoCapture}
               className="glass-surface-interactive py-3.5 px-2 rounded-2xl flex flex-col items-center justify-center gap-1.5 text-xs font-bold text-neutral-200 hover:text-white border border-white/10 group cursor-pointer"
-              title="Take a Photo"
             >
               <div className="w-8 h-8 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center group-hover:scale-110 transition-transform">
                 <Camera className="w-4 h-4" />
