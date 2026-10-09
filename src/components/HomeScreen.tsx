@@ -13,6 +13,48 @@ interface HomeScreenProps {
   historyCount: number;
 }
 
+// Helper to compress and downscale uploaded image client-side to ensure fast, reliable upload
+function compressAndResizeImage(file: File, maxDim = 1280, quality = 0.85): Promise<string> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      if (!dataUrl) {
+        resolve("");
+        return;
+      }
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+        if (width > maxDim || height > maxDim) {
+          if (width >= height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(dataUrl);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    };
+    reader.onerror = () => resolve("");
+    reader.readAsDataURL(file);
+  });
+}
+
 export const HomeScreen: React.FC<HomeScreenProps> = ({
   onStartLiveScan,
   onStartPhotoCapture,
@@ -24,18 +66,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const dataUrl = event.target?.result as string;
-        if (dataUrl) {
-          onUploadImage(dataUrl);
+      try {
+        const optimized = await compressAndResizeImage(file);
+        if (optimized) {
+          onUploadImage(optimized);
         }
-      };
-      reader.readAsDataURL(file);
+      } catch (err) {
+        console.error("Upload error:", err);
+      }
     }
+    e.target.value = "";
   };
 
   return (

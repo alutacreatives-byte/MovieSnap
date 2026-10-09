@@ -15,6 +15,48 @@ interface ScanningScreenProps {
   initialMode?: 'live' | 'photo';
 }
 
+// Helper to compress and downscale uploaded image client-side
+function compressAndResizeImage(file: File, maxDim = 1280, quality = 0.85): Promise<string> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      if (!dataUrl) {
+        resolve("");
+        return;
+      }
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+        if (width > maxDim || height > maxDim) {
+          if (width >= height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(dataUrl);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    };
+    reader.onerror = () => resolve("");
+    reader.readAsDataURL(file);
+  });
+}
+
 export const ScanningScreen: React.FC<ScanningScreenProps> = ({
   onIdentified,
   onCancel,
@@ -123,14 +165,14 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
   }, [initialImage]);
 
   // Capture current frame from <video> onto canvas
-  const captureFrame = (quality = 0.9): string | null => {
+  // Capture current frame from <video> onto canvas with strict aspect ratio preservation
+  const captureFrame = (quality = 0.85, maxDim = 1280): string | null => {
     if (!videoRef.current) return null;
     const video = videoRef.current;
     const vWidth = video.videoWidth;
     const vHeight = video.videoHeight;
     if (vWidth === 0 || vHeight === 0) return null;
 
-    const maxDim = 1920;
     let canvasWidth = vWidth;
     let canvasHeight = vHeight;
 
@@ -184,75 +226,107 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
     }
   };
 
-  // 1. Live Continuous Scanning: periodically sample live camera frames
+  // 1. Live Continuous Scanning: chained setTimeout loop with quota protection & zero overlaps
   useEffect(() => {
-    if (!cameraActive || capturedPhoto || isProcessing || identificationFailure || initialMode === 'photo') {
-      if (liveScanIntervalRef.current) {
-        clearInterval(liveScanIntervalRef.current);
-        liveScanIntervalRef.current = null;
-      }
+    if (!cameraActive || capturedPhoto || isProcessing || identificationFailure || initialMode === "photo") {
       return;
     }
 
-    // Run continuous frame evaluation every 1.8 seconds
-    liveScanIntervalRef.current = setInterval(async () => {
-      if (isAnalyzingRef.current || !videoRef.current || videoRef.current.paused) return;
+    let isCancelled = false;
+    let timerId: NodeJS.Timeout | null = null;
 
-      const frameDataUrl = captureFrame(0.7);
-      if (!frameDataUrl) return;
+    const performLiveScan = async () => {
+      if (isCancelled || isAnalyzingRef.current) return;
+
+      const video = videoRef.current;
+      if (!video || video.paused || video.readyState < 2 || video.videoWidth === 0) {
+        if (!isCancelled) {
+          timerId = setTimeout(performLiveScan, 1200);
+        }
+        return;
+      }
+
+      // Sample lightweight frame for live scan (max 640px to ensure quick upload & low quota usage)
+      const frameDataUrl = captureFrame(0.65, 640);
+      if (!frameDataUrl) {
+        if (!isCancelled) {
+          timerId = setTimeout(performLiveScan, 1500);
+        }
+        return;
+      }
 
       try {
         isAnalyzingRef.current = true;
         setIsLiveAnalyzing(true);
 
-        const result: IdentificationResult = await identifyMovieFromImage(frameDataUrl, popularMovies, { isLiveScan: true });
+        const result: IdentificationResult = await identifyMovieFromImage(
+          frameDataUrl,
+          popularMovies,
+          { isLiveScan: true }
+        );
 
-        if (result.identified && result.movie) {
-          // Movie identified live without taking photo!
+        if (!isCancelled && result.identified && result.movie) {
           sound.success();
           stopCamera();
           onIdentified(result.movie);
+          return;
         }
       } catch (err) {
-        console.warn('Live frame analysis check:', err);
+        console.warn("Live frame analysis check:", err);
       } finally {
         isAnalyzingRef.current = false;
         setIsLiveAnalyzing(false);
+        // Only schedule next scan AFTER the previous one completely finishes
+        // 4000ms delay ensures strictly at most 10-12 requests/minute, well within Gemini quota
+        if (!isCancelled) {
+          timerId = setTimeout(performLiveScan, 4000);
+        }
       }
-    }, 3200);
+    };
+
+    // Initial wait to let camera sensor adjust exposure
+    timerId = setTimeout(performLiveScan, 1500);
 
     return () => {
-      if (liveScanIntervalRef.current) {
-        clearInterval(liveScanIntervalRef.current);
-        liveScanIntervalRef.current = null;
-      }
+      isCancelled = true;
+      if (timerId) clearTimeout(timerId);
     };
   }, [cameraActive, capturedPhoto, isProcessing, identificationFailure, initialMode, popularMovies, onIdentified, stopCamera]);
 
   // 2. Take a photo & analyze captured image
-  const handleCapturePhoto = () => {
+  const handleCapturePhoto = async () => {
     if (isProcessing) return;
-    const photoDataUrl = captureFrame(0.9);
+
+    // Handle camera warming up / permission delays
+    const video = videoRef.current;
+    if (video && streamRef.current && (video.readyState < 2 || video.videoWidth === 0)) {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+    }
+
+    const photoDataUrl = captureFrame(0.85, 1280);
     if (!photoDataUrl) {
+      // If camera frame is unavailable in this environment, open file picker directly
       fileInputRef.current?.click();
       return;
     }
+
     processImageDirectly(photoDataUrl);
   };
 
   // 3. Upload an image from device & analyze
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const dataUrl = event.target?.result as string;
-        if (dataUrl) {
-          processImageDirectly(dataUrl);
+      try {
+        const optimized = await compressAndResizeImage(file);
+        if (optimized) {
+          processImageDirectly(optimized);
         }
-      };
-      reader.readAsDataURL(file);
+      } catch (err) {
+        console.error("Upload error:", err);
+      }
     }
+    e.target.value = "";
   };
 
   // 2. Back arrow returns to MovieSnap homepage
