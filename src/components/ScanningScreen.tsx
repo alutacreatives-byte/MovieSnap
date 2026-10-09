@@ -23,8 +23,8 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
   initialMode = 'live',
 }) => {
   const [cameraActive, setCameraActive] = useState(false);
-  const [cameraError, setCameraError] = useState<string | null>(null);
-  const [permissionDenied, setPermissionDenied] = useState(false);
+  
+  
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const [torchOn, setTorchOn] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(initialImage || null);
@@ -54,8 +54,8 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
   // 1. Open device camera
   const startCamera = useCallback(async (mode: 'environment' | 'user' = facingMode) => {
     try {
-      setCameraError(null);
-      setPermissionDenied(false);
+      
+      
       setIdentificationFailure(null);
       setCapturedPhoto(null);
       setIsProcessing(false);
@@ -100,12 +100,10 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
       }
     } catch (err: unknown) {
       console.warn('Camera request error:', err);
-      const isDenied = err instanceof DOMException && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError');
-      setPermissionDenied(isDenied);
-      const msg = isDenied 
-        ? 'Camera permission was not granted. Please allow camera access in your browser settings to scan movies.'
-        : err instanceof Error ? err.message : 'Could not start camera feed.';
-      setCameraError(msg);
+      
+      
+      
+      
       setCameraActive(false);
     }
   }, [facingMode, stopCamera]);
@@ -236,7 +234,7 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
     if (isProcessing) return;
     const photoDataUrl = captureFrame(0.9);
     if (!photoDataUrl) {
-      setCameraError('Unable to capture frame. Please ensure camera is active.');
+      
       return;
     }
     processImageDirectly(photoDataUrl);
