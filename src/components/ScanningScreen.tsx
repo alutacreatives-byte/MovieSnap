@@ -386,7 +386,7 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
           </span>
           <span className="text-xs font-extrabold tracking-widest text-white uppercase font-sans flex items-center gap-1">
             {isProcessing
-              ? 'ANALYZING...'
+              ? 'SEARCHING WEB...'
               : capturedPhoto
               ? 'PHOTO CAPTURED'
               : isLiveAnalyzing
@@ -499,7 +499,9 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
                 <div className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
               </div>
               <p className="text-[11px] font-bold text-white mt-2 tracking-wide drop-shadow-md text-center">
-                {capturedPhoto
+                {isProcessing
+                  ? 'Analyzing scene & searching the web...'
+                  : capturedPhoto
                   ? 'Processing image...'
                   : 'Point at TV screen or movie poster'}
               </p>
