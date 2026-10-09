@@ -219,7 +219,7 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
         isAnalyzingRef.current = false;
         setIsLiveAnalyzing(false);
       }
-    }, 1800);
+    }, 3200);
 
     return () => {
       if (liveScanIntervalRef.current) {
@@ -234,7 +234,7 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
     if (isProcessing) return;
     const photoDataUrl = captureFrame(0.9);
     if (!photoDataUrl) {
-      
+      fileInputRef.current?.click();
       return;
     }
     processImageDirectly(photoDataUrl);
@@ -543,7 +543,7 @@ export const ScanningScreen: React.FC<ScanningScreenProps> = ({
           {/* 2. Primary Tactile Shutter Button: Take a photo manually */}
           <button
             onClick={handleCapturePhoto}
-            disabled={isProcessing || !cameraActive}
+            disabled={isProcessing}
             className="w-18 h-18 rounded-full p-1.5 border-3 border-white/50 hover:border-white transition-all active:scale-95 group cursor-pointer shadow-2xl shadow-rose-950/80 disabled:opacity-50"
             aria-label="Take Photo"
           >
